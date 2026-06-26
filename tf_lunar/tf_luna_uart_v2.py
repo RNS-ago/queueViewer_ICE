@@ -71,8 +71,8 @@ BAUD      = 115200  # TF-Luna default
 FRAME_LEN = 9       # 9-byte/cm default output frame
 HEADER    = 0x59    # frame header byte (appears twice)
 
-UART_A_ID, TX_A_PIN, RX_A_PIN = 1, 27, 26   # Sensor A -> UART0, GP0/GP1
-UART_B_ID, TX_B_PIN, RX_B_PIN = 2, 17, 16   # Sensor B -> UART1, GP4/GP5
+UART_A_ID, TX_A_PIN, RX_A_PIN = 1, 17, 18   # Sensor A -> UART0, GP0/GP1
+UART_B_ID, TX_B_PIN, RX_B_PIN = 2, 4, 5   # Sensor B -> UART1, GP4/GP5
 
 # ---- Reading-validity thresholds (from manual) ----------------------
 BLIND_ZONE_CM   = 20     # distances below this are unreliable

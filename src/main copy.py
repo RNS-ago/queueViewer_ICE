@@ -5,8 +5,8 @@ Boot order:
   1. Try to bring up WiFi (optional — counting works offline too).
   2. Build the logger (online push + local store-and-forward fallback).
   3. Calibrate the two TF-Luna beams against the empty lane.
-  4. Run the loop: read sensors and keep the in/out tallies; once per
-     minute log a snapshot (in, out, occupancy) and retry buffered records.
+  4. Run the loop: read sensors -> on each IN/OUT, log it; periodically
+     push a heartbeat snapshot and retry any buffered records.
 
 All tunables live in config.py. Drop this whole src/ folder on the device;
 MicroPython runs main.py automatically at boot.
@@ -56,14 +56,15 @@ def run(logger, counter):
     while True:
         now = time.ticks_ms()
 
-        # --- counting only (crossings are tallied, not logged per event) ---
+        # --- counting + per-event logging ---
         for direction, in_count, out_count in counter.update(now):
+            logger.record(direction, in_count, out_count)
             if cfg.DEBUG:
                 tag = " IN " if direction == "in" else " OUT"
                 print(" >{}  in={} out={} occupancy={}".format(
                     tag, in_count, out_count, in_count - out_count))
 
-        # --- periodic snapshot: log in/out/occupancy once per minute ---
+        # --- periodic heartbeat snapshot (proves the device is alive) ---
         if time.ticks_diff(now, next_snapshot) >= 0:
             next_snapshot = time.ticks_add(now, cfg.SNAPSHOT_EVERY * 1000)
             logger.record("snapshot", counter.in_count, counter.out_count)

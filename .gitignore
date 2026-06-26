@@ -1,4 +1,8 @@
+.micropico
+
 *.pdf
 *.ppxt
 
 .venv/
+__pycache__/
+.vscode/

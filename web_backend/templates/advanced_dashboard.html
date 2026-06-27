@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="30">
+  <title>Queue counter — staff dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-3.0.0.min.js" charset="utf-8"></script>
+  <style>
+    html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
+                 font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between;
+             flex-wrap: wrap; gap: 12px; }
+    h1 { font-size: 1.2rem; margin: 0; }
+    .cards { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+    .card { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px;
+            padding: 16px 20px; min-width: 120px; }
+    .card .v { font-size: 2rem; font-weight: 700; }
+    .card .l { color: #888; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+    .occ .v { color: #4FC3F7; } .in .v { color: #66BB6A; } .out .v { color: #FF7043; }
+    select, a.btn { background: #1c1c1c; color: #e0e0e0; border: 1px solid #333;
+                    border-radius: 6px; padding: 6px 10px; }
+    a { color: #4FC3F7; text-decoration: none; }
+    .muted { color: #777; font-size: .85rem; }
+    #chart { width: 100%; }
+    nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 12px 0 4px; }
+    nav.tabs a { padding: 8px 16px; color: #aaa; border-bottom: 2px solid transparent; }
+    nav.tabs a.active { color: #4FC3F7; border-bottom-color: #4FC3F7; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Queue counter — staff dashboard</h1>
+      <div>
+        <form method="get" style="display:inline">
+          <select name="device" onchange="this.form.submit()">
+            {% for d in devices %}
+              <option value="{{ d }}" {% if d == device %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <span class="muted">· {{ user.username }} ·</span>
+        <form action="{% url 'logout' %}" method="post" style="display:inline">
+          {% csrf_token %}<button class="btn" type="submit">Log out</button>
+        </form>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <a class="active" href="{% url 'advanced_dashboard' %}{% if device %}?device={{ device }}{% endif %}">Dashboard</a>
+      {% if user.is_staff %}<a href="{% url 'manage_keys' %}">API keys</a>{% endif %}
+    </nav>
+
+    <div class="cards">
+      <div class="card occ"><div class="v">{% if latest %}{{ latest.occupancy }}{% else %}—{% endif %}</div><div class="l">Occupancy</div></div>
+      <div class="card in"><div class="v">{% if latest %}{{ latest.in }}{% else %}—{% endif %}</div><div class="l">Total in</div></div>
+      <div class="card out"><div class="v">{% if latest %}{{ latest.out }}{% else %}—{% endif %}</div><div class="l">Total out</div></div>
+      <div class="card"><div class="v">{{ total_records }}</div><div class="l">Records stored</div></div>
+    </div>
+
+    <div id="chart"></div>
+    <p class="muted">Showing latest records for <b>{{ device|default:"(no device)" }}</b>. Auto-refreshes every 30s.</p>
+  </div>
+
+  <script id="series-data" type="application/json">{{ series_json|safe }}</script>
+  <script id="boots-data" type="application/json">{{ boots_json|safe }}</script>
+  <script>
+    // Mirrors visualize_counts.build_figure: two stacked subplots (occupancy on
+    // top, cumulative in/out below), boot dividers, integer count axes, dark theme.
+    const series = JSON.parse(document.getElementById("series-data").textContent || "[]");
+    const boots = JSON.parse(document.getElementById("boots-data").textContent || "[]");
+    const cmax = {{ cmax }};
+    const x = series.map(r => r.x);
+    const dtick = cmax <= 12 ? 1 : undefined;   // whole people only when the range is small
+
+    const GRID = "#283442", LINE = "#506784";
+
+    const traces = [
+      { x, y: series.map(r => r.occupancy), name: "occupancy", mode: "lines+markers",
+        line: { color: "#4FC3F7", width: 2, shape: "hv" }, marker: { size: 6, color: "#4FC3F7" },
+        fill: "tozeroy", fillcolor: "rgba(79,195,247,0.12)",
+        hovertemplate: "%{x}<br>occupancy: %{y}<extra></extra>", xaxis: "x", yaxis: "y" },
+      { x, y: series.map(r => r.in), name: "in (total)", mode: "lines+markers",
+        line: { color: "#66BB6A", width: 2 }, marker: { size: 6, color: "#66BB6A" },
+        hovertemplate: "%{x}<br>in: %{y}<extra></extra>", xaxis: "x2", yaxis: "y2" },
+      { x, y: series.map(r => r.out), name: "out (total)", mode: "lines+markers",
+        line: { color: "#FF7043", width: 2 }, marker: { size: 6, color: "#FF7043" },
+        hovertemplate: "%{x}<br>out: %{y}<extra></extra>", xaxis: "x2", yaxis: "y2" },
+    ];
+
+    const annotations = [
+      { text: "Occupancy (people inside)", x: 0.5, xref: "paper", y: 1.0, yref: "paper",
+        xanchor: "center", yanchor: "bottom", showarrow: false, font: { size: 16 } },
+      { text: "Cumulative in / out per run", x: 0.5, xref: "paper", y: 0.455, yref: "paper",
+        xanchor: "center", yanchor: "bottom", showarrow: false, font: { size: 16 } },
+    ];
+    const shapes = [];
+    boots.forEach(b => {
+      ["x", "x2"].forEach(ax => shapes.push({
+        type: "line", x0: b.x, x1: b.x, xref: ax,
+        y0: 0, y1: 1, yref: (ax === "x" ? "y" : "y2") + " domain",
+        line: { color: "#FFB74D", width: 2, dash: "dash" },
+      }));
+      annotations.push({ text: b.label, x: b.x, xref: "x", y: 1.0, yref: "paper",
+        xanchor: "left", yanchor: "bottom", showarrow: false,
+        font: { color: "#FFB74D", size: 11 }, bgcolor: "rgba(17,17,17,0.75)", borderpad: 2 });
+    });
+
+    const layout = {
+      title: { text: "Queue counter — {{ device|default:'all devices' }}" },
+      height: 720, hovermode: "x unified", margin: { t: 90 },
+      paper_bgcolor: "#111", plot_bgcolor: "#111", font: { color: "#e0e0e0" },
+      legend: { orientation: "h", yanchor: "bottom", y: 1.02, xanchor: "right", x: 1 },
+      xaxis: { domain: [0, 1], anchor: "y", matches: "x2", showticklabels: false,
+               gridcolor: GRID, linecolor: LINE, zerolinecolor: GRID },
+      yaxis: { domain: [0.545, 1.0], anchor: "x", title: { text: "people" },
+               tickformat: "d", rangemode: "tozero", dtick, gridcolor: GRID,
+               linecolor: LINE, zerolinecolor: GRID },
+      xaxis2: { domain: [0, 1], anchor: "y2", title: { text: "time" },
+                gridcolor: GRID, linecolor: LINE, zerolinecolor: GRID },
+      yaxis2: { domain: [0, 0.455], anchor: "x2", title: { text: "count" },
+                tickformat: "d", rangemode: "tozero", dtick, gridcolor: GRID,
+                linecolor: LINE, zerolinecolor: GRID },
+      shapes, annotations,
+    };
+
+    if (series.length) {
+      Plotly.newPlot("chart", traces, layout, { responsive: true });
+    } else {
+      document.getElementById("chart").innerHTML =
+        '<p class="muted" style="padding:40px;text-align:center">No data yet.</p>';
+    }
+  </script>
+</body>
+</html>

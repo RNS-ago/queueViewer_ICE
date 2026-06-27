@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API keys — staff dashboard</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
+                 font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    h1 { font-size: 1.2rem; margin: 0; }
+    a { color: #4FC3F7; text-decoration: none; }
+    .muted { color: #777; font-size: .85rem; }
+    nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 12px 0 16px; }
+    nav.tabs a { padding: 8px 16px; color: #aaa; border-bottom: 2px solid transparent; }
+    nav.tabs a.active { color: #4FC3F7; border-bottom-color: #4FC3F7; }
+    .msg { padding: 10px 14px; border-radius: 8px; margin: 8px 0; font-size: .9rem; word-break: break-all; }
+    .msg.warning { background: #2c2410; border: 1px solid #6b5a1e; color: #ffd479; }
+    .msg.success { background: #102c16; border: 1px solid #1e6b32; color: #79ffa0; }
+    .msg.error   { background: #2c1010; border: 1px solid #6b1e1e; color: #ff9a9a; }
+    .card { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #2a2a2a; font-size: .9rem; }
+    th { color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; font-size: .72rem; }
+    code { background: #111; padding: 2px 6px; border-radius: 4px; color: #4FC3F7; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+    .pill.on { background: #102c16; color: #79ffa0; } .pill.off { background: #2c1010; color: #ff9a9a; }
+    input[type=text] { background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; min-width: 220px; }
+    button { border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 600; }
+    button.primary { background: #4FC3F7; color: #062a38; }
+    button.warn { background: #5a3a12; color: #ffd479; }
+    button.danger { background: #5a1212; color: #ff9a9a; }
+    button.ok { background: #12502a; color: #79ffa0; }
+    form.inline { display: inline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Queue counter — staff dashboard</h1>
+      <div>
+        <span class="muted">· {{ user.username }} ·</span>
+        <form action="{% url 'logout' %}" method="post" class="inline">
+          {% csrf_token %}<button type="submit">Log out</button>
+        </form>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <a href="{% url 'advanced_dashboard' %}">Dashboard</a>
+      <a class="active" href="{% url 'manage_keys' %}">API keys</a>
+    </nav>
+
+    {% for message in messages %}
+      <div class="msg {{ message.tags }}">{{ message }}</div>
+    {% endfor %}
+
+    <div class="card">
+      <h2 style="margin-top:0;font-size:1rem">Create a new key</h2>
+      <p class="muted">The full key is shown once, right after creation. Set it as
+        <code>AUTH_TOKEN</code> in the device's <code>config.py</code>.</p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+        <input type="text" name="name" placeholder="Device / client name, e.g. entrance-01" required>
+        <button class="primary" type="submit">Create key</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0;font-size:1rem">Existing keys</h2>
+      {% if keys %}
+      <table>
+        <thead>
+          <tr><th>Name</th><th>Prefix</th><th>Status</th><th>Created</th><th>Last used</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for key in keys %}
+          <tr>
+            <td>{{ key.name }}</td>
+            <td><code>{{ key.prefix }}…</code></td>
+            <td>
+              {% if key.active %}<span class="pill on">active</span>
+              {% else %}<span class="pill off">revoked</span>{% endif %}
+            </td>
+            <td class="muted">{{ key.created_at|date:"Y-m-d H:i" }}</td>
+            <td class="muted">{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d H:i" }}{% else %}never{% endif %}</td>
+            <td>
+              {% if key.active %}
+                <form method="post" class="inline">{% csrf_token %}
+                  <input type="hidden" name="action" value="revoke">
+                  <input type="hidden" name="pk" value="{{ key.pk }}">
+                  <button class="warn" type="submit">Revoke</button>
+                </form>
+              {% else %}
+                <form method="post" class="inline">{% csrf_token %}
+                  <input type="hidden" name="action" value="activate">
+                  <input type="hidden" name="pk" value="{{ key.pk }}">
+                  <button class="ok" type="submit">Re-activate</button>
+                </form>
+              {% endif %}
+              <form method="post" class="inline" onsubmit="return confirm('Delete this key permanently?');">{% csrf_token %}
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="pk" value="{{ key.pk }}">
+                <button class="danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+        <p class="muted">No API keys yet. Create one above so a device can post to <code>/api/log</code>.</p>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

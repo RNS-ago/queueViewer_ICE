@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="30">
+  <title>Queue counter — public</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
+                 font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 32px 16px; text-align: center; }
+    .big { font-size: 5rem; font-weight: 700; color: #4FC3F7; line-height: 1; }
+    .label { text-transform: uppercase; letter-spacing: .1em; color: #888; font-size: .8rem; }
+    .meta { margin-top: 24px; color: #777; font-size: .85rem; }
+    a { color: #4FC3F7; }
+  </style>
+</head>
+<body>
+  <!--
+    MINIMAL PUBLIC DASHBOARD — placeholder.
+    Replace this file with the minimal page you want to provide.
+    The view passes these template variables you can use:
+      {{ device }}        current device id
+      {{ latest }}        latest record dict (.occupancy, .in, .out, .ts)
+      {{ series_json }}   JSON array of recent records (safe to embed in JS)
+  -->
+  <div class="wrap">
+    <div class="label">People inside{% if device %} · {{ device }}{% endif %}</div>
+    {% if latest %}
+      <div class="big">{{ latest.occupancy }}</div>
+      <div class="meta">in {{ latest.in }} · out {{ latest.out }}<br>as of {{ latest.ts }}</div>
+    {% else %}
+      <div class="big">—</div>
+      <div class="meta">No data yet.</div>
+    {% endif %}
+    <div class="meta"><a href="{% url 'advanced_dashboard' %}">Staff dashboard →</a></div>
+  </div>
+</body>
+</html>

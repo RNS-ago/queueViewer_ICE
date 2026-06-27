@@ -1,0 +1,19 @@
+# Caddy reverse proxy for the queueTracker backend.
+#
+# Caddy automatically obtains and renews a Let's Encrypt TLS certificate for
+# the domain below, so the dashboards and the /api/log endpoint are served over
+# HTTPS. Gunicorn listens on 127.0.0.1:8000; WhiteNoise serves static files, so
+# Caddy only needs to reverse-proxy everything.
+#
+# Install:
+#   sudo apt install caddy            # or per https://caddyserver.com/docs/install
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # then edit the domain
+#   sudo systemctl reload caddy
+#
+# Replace counter.example.com with your real domain (its DNS A/AAAA record must
+# point at this server first, or the TLS challenge will fail).
+
+counter.example.com {
+    encode gzip zstd
+    reverse_proxy 127.0.0.1:8000
+}

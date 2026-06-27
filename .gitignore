@@ -10,3 +10,4 @@ __pycache__/
 # Django backend
 web_backend/db.sqlite3
 web_backend/.env
+web_backend/staticfiles/

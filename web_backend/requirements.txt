@@ -1,1 +1,5 @@
 Django>=5.0
+
+# Production serving
+gunicorn>=21.0          # WSGI server (behind the Caddy reverse proxy)
+whitenoise>=6.0         # serves static files (Django admin CSS/JS)

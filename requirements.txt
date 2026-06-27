@@ -1,0 +1,14 @@
+# Interactive Plotly dashboard
+pandas>=2.0
+plotly>=5.0
+
+# Plotting / numerics
+matplotlib==3.11.0
+numpy==2.4.6
+
+# ESP32 device tooling (CLI)
+mpremote==1.28.0
+pyserial==3.5
+
+# ydlidar: local install, not on PyPI
+#   ./.venv/bin/pip install /home/ago/repos/YDLidar-SDK

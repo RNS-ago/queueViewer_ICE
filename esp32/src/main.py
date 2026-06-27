@@ -89,6 +89,9 @@ def main():
     try:
         run(logger, counter)
     except KeyboardInterrupt:
+        # Log a final snapshot on manual stop, regardless of the snapshot timer,
+        # so short runs (< SNAPSHOT_EVERY) still leave a record.
+        logger.record("snapshot", counter.in_count, counter.out_count)
         print("\nStopped. Final: in={} out={} occupancy={}".format(
             counter.in_count, counter.out_count, counter.occupancy))
 

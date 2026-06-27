@@ -48,6 +48,14 @@ def _file_exists(path):
         return False
 
 
+def _file_empty(path):
+    """True if the file is missing or has zero bytes (no header yet)."""
+    try:
+        return os.stat(path)[6] == 0
+    except OSError:
+        return True
+
+
 class Logger:
     def __init__(self, cfg, wifi):
         self.cfg = cfg
@@ -55,6 +63,22 @@ class Logger:
         self.requests = _import_requests()
         if self.requests is None:
             print("logger: no HTTP library found — running LOCAL-ONLY")
+        # A fresh id every boot so records from different runs can be told apart.
+        self.boot_id = self._new_boot_id()
+        print("logger: boot_id =", self.boot_id)
+        # Emit an explicit marker so each start-up stands out in the logs.
+        self.record("boot", 0, 0)
+
+    # ---- boot / session id -------------------------------------------
+    def _new_boot_id(self):
+        """Short id unique to this power-up (random + uptime, no NTP needed)."""
+        try:
+            import urandom
+            rnd = urandom.getrandbits(24)
+        except ImportError:
+            import random
+            rnd = random.getrandbits(24)
+        return "{:06x}{:08x}".format(rnd & 0xFFFFFF, time.ticks_ms() & 0xFFFFFFFF)
 
     # ---- timestamps --------------------------------------------------
     def _timestamp(self):
@@ -69,10 +93,12 @@ class Logger:
     def record(self, event, in_count, out_count):
         """Persist one record locally and try to ship it online.
 
-        `event` is "in", "out", or "snapshot" (periodic heartbeat).
+        `event` is "in", "out", "snapshot" (periodic heartbeat), or "boot"
+        (a one-shot marker written at start-up to delimit runs).
         """
         payload = {
             "device_id": self.cfg.DEVICE_ID,
+            "boot_id": self.boot_id,
             "ts": self._timestamp(),
             "event": event,
             "in": in_count,
@@ -138,14 +164,15 @@ class Logger:
 
     # ---- permanent local record -------------------------------------
     def _append_csv(self, payload):
-        new = not _file_exists(self.cfg.LOCAL_LOG_FILE)
+        new = _file_empty(self.cfg.LOCAL_LOG_FILE)
         try:
             with open(self.cfg.LOCAL_LOG_FILE, "a") as f:
                 if new:
-                    f.write("ts,device_id,event,in,out,occupancy\n")
-                f.write("{},{},{},{},{},{}\n".format(
-                    payload["ts"], payload["device_id"], payload["event"],
-                    payload["in"], payload["out"], payload["occupancy"]))
+                    f.write("ts,device_id,boot_id,event,in,out,occupancy\n")
+                f.write("{},{},{},{},{},{},{}\n".format(
+                    payload["ts"], payload["device_id"], payload["boot_id"],
+                    payload["event"], payload["in"], payload["out"],
+                    payload["occupancy"]))
         except OSError as e:
             print("logger: could not write CSV:", e)
 

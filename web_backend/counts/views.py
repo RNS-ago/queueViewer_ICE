@@ -102,7 +102,16 @@ def _resolve_times(records):
         by_boot[r.boot_id].append(r)
 
     times = {}
-    for rows in by_boot.values():
+    # Runs that never synced are laid end-to-end on the epoch so successive
+    # runs read left-to-right instead of piling up at 1970-01-01 00:00 on top
+    # of each other. Uptime resets per boot, so the only cross-run ordering
+    # signal is receipt time — walk boots in that order to keep the sequence
+    # chronological.
+    epoch_cursor = _EPOCH
+    run_gap = timedelta(minutes=5)
+    boots_in_order = sorted(by_boot.values(),
+                            key=lambda rows: min(r.received_at for r in rows))
+    for rows in boots_in_order:
         walls = {r.pk: r.ts_parsed for r in rows if r.ts_parsed}
         ups = {}
         for r in rows:
@@ -112,6 +121,7 @@ def _resolve_times(records):
                     ups[r.pk] = int(m.group(1))
         first_wall = min(walls.values()) if walls else None
         max_up = max(ups.values()) if ups else None
+        min_up = min(ups.values()) if ups else None
         for r in rows:
             if r.pk in walls:
                 times[r.pk] = walls[r.pk]
@@ -121,9 +131,13 @@ def _resolve_times(records):
                                    - timedelta(milliseconds=max_up - ups[r.pk])
                                    - timedelta(seconds=1))
                 else:
-                    times[r.pk] = _EPOCH + timedelta(milliseconds=ups[r.pk])
+                    # Start this run where the previous unsynced run left off.
+                    times[r.pk] = epoch_cursor + timedelta(milliseconds=ups[r.pk] - min_up)
             else:
                 times[r.pk] = r.received_at
+        # Advance the cursor past any unsynced span we just laid on the epoch.
+        if first_wall is None and ups:
+            epoch_cursor += timedelta(milliseconds=max_up - min_up) + run_gap
     return times
 
 
@@ -142,21 +156,30 @@ def _chart_data(device_id, limit=2000):
     times = _resolve_times(records)
     records.sort(key=lambda r: (times[r.pk], r.pk))
 
-    series = [
-        {
+    # Counts reset to 0 at every boot, so a single continuous line would draw a
+    # misleading plunge from the end of one run to the start of the next. Insert
+    # a null row at each boot boundary to lift the pen between runs (records are
+    # time-sorted, so each run is a contiguous block).
+    series = []
+    prev_boot = None
+    for r in records:
+        if prev_boot is not None and r.boot_id != prev_boot:
+            series.append({"x": None, "event": "gap",
+                           "in": None, "out": None, "occupancy": None})
+        series.append({
             "x": times[r.pk].isoformat(),
             "event": r.event,
             "in": r.count_in,
             "out": r.count_out,
             "occupancy": r.occupancy,
-        }
-        for r in records
-    ]
+        })
+        prev_boot = r.boot_id
+
     boots = []
     for n, r in enumerate((r for r in records if r.event == "boot"), start=1):
         boots.append({"x": times[r.pk].isoformat(), "label": f"⏻ boot {n}"})
 
-    cmax = max((max(s["in"], s["out"], s["occupancy"]) for s in series), default=0)
+    cmax = max((max(r.count_in, r.count_out, r.occupancy) for r in records), default=0)
     return series, boots, cmax
 
 

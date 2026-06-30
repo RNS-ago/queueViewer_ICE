@@ -86,29 +86,30 @@ def api_log(request):
 
 
 _UPTIME_RE = re.compile(r"uptime\+(\d+)ms")
-_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def _resolve_times(records):
     """Map each record's pk -> an x-axis datetime.
 
     ISO-8601 stamps are used as-is. Pre-NTP "uptime+<ms>" markers have no
-    absolute reference, so (mirroring visualize_counts.parse_timestamps) we
-    anchor each boot's uptime stream to that boot's first wall-clock time —
-    or, if a whole run never synced, lay it on the epoch so its shape still
-    shows. Anything else falls back to received_at.
+    absolute reference, so we anchor each boot's uptime stream to that boot's
+    first wall-clock time — or, if a whole run never synced, to that run's
+    server-receipt time (received_at). Anything else falls back to received_at.
     """
     by_boot = defaultdict(list)
     for r in records:
         by_boot[r.boot_id].append(r)
 
     times = {}
-    # Runs that never synced are laid end-to-end on the epoch so successive
-    # runs read left-to-right instead of piling up at 1970-01-01 00:00 on top
-    # of each other. Uptime resets per boot, so the only cross-run ordering
-    # signal is receipt time — walk boots in that order to keep the sequence
-    # chronological.
-    epoch_cursor = _EPOCH
+    # A run that never NTP-synced carries only "uptime+<ms>" markers — no wall
+    # clock. We lay it on the real timeline starting at its earliest receipt time
+    # (received_at), spread out by the uptime deltas. (It used to be parked on the
+    # 1970 epoch; once mixed with NTP-synced runs that blew the x-axis out to a
+    # ~56-year span and squashed the live data into a sliver.) Successive unsynced
+    # runs are nudged forward so they don't overlap. Uptime resets per boot, so
+    # receipt time is the only cross-run ordering signal — walk boots in that
+    # order to keep the sequence chronological.
+    unsynced_cursor = None
     run_gap = timedelta(minutes=5)
     boots_in_order = sorted(by_boot.values(),
                             key=lambda rows: min(r.received_at for r in rows))
@@ -123,6 +124,13 @@ def _resolve_times(records):
         first_wall = min(walls.values()) if walls else None
         max_up = max(ups.values()) if ups else None
         min_up = min(ups.values()) if ups else None
+        # Anchor for a wholly-unsynced run: its own receipt time, but never
+        # before the previous unsynced run ended, so they don't pile up.
+        anchor = None
+        if first_wall is None and ups:
+            anchor = min(r.received_at for r in rows)
+            if unsynced_cursor is not None and anchor < unsynced_cursor:
+                anchor = unsynced_cursor
         for r in rows:
             if r.pk in walls:
                 times[r.pk] = walls[r.pk]
@@ -132,13 +140,12 @@ def _resolve_times(records):
                                    - timedelta(milliseconds=max_up - ups[r.pk])
                                    - timedelta(seconds=1))
                 else:
-                    # Start this run where the previous unsynced run left off.
-                    times[r.pk] = epoch_cursor + timedelta(milliseconds=ups[r.pk] - min_up)
+                    times[r.pk] = anchor + timedelta(milliseconds=ups[r.pk] - min_up)
             else:
                 times[r.pk] = r.received_at
-        # Advance the cursor past any unsynced span we just laid on the epoch.
-        if first_wall is None and ups:
-            epoch_cursor += timedelta(milliseconds=max_up - min_up) + run_gap
+        # Advance the cursor past the unsynced span we just laid down.
+        if anchor is not None:
+            unsynced_cursor = anchor + timedelta(milliseconds=max_up - min_up) + run_gap
     return times
 
 

@@ -28,7 +28,8 @@ def boot():
     # 1. WiFi (best effort — never blocks counting)
     online = wifi_manager.connect(
         cfg.WIFI_SSID, cfg.WIFI_PASSWORD,
-        timeout=cfg.WIFI_CONNECT_TIMEOUT, retries=cfg.WIFI_RETRIES)
+        timeout=cfg.WIFI_CONNECT_TIMEOUT, retries=cfg.WIFI_RETRIES,
+        fallback_dns=getattr(cfg, "WIFI_FALLBACK_DNS", ""))
     if online and cfg.WIFI_SYNC_TIME:
         wifi_manager.sync_time()
     if not online:
@@ -71,6 +72,12 @@ def run(logger, counter):
         # --- periodic retry of the offline buffer ---
         if time.ticks_diff(now, next_flush) >= 0:
             next_flush = time.ticks_add(now, cfg.FLUSH_EVERY * 1000)
+            # Keep retrying NTP until the clock is real: TLS cert validity (and
+            # accurate timestamps) depend on it, and DNS/NTP may not be ready at
+            # boot. Once synced, sync_time() is no longer called.
+            if (cfg.WIFI_SYNC_TIME and not wifi_manager.time_synced()
+                    and wifi_manager.is_connected()):
+                wifi_manager.sync_time()
             logger.flush()
 
         # --- live debug readout ---

@@ -20,7 +20,32 @@ _wlan = None
 _time_synced = False
 
 
-def connect(ssid, password, timeout=15, retries=3):
+def _ensure_dns(fallback):
+    """Make sure name resolution works; if not, install a fallback resolver.
+
+    iPhone hotspots (and some APs) advertise a DNS server MicroPython can't use,
+    so getaddrinfo fails with OSError -202 even though we're associated. If a
+    test lookup fails and a fallback is configured, swap only the DNS field of
+    ifconfig (keeping the DHCP IP/mask/gateway). No-op if DNS already works.
+    """
+    if not fallback or _wlan is None:
+        return
+    import socket
+    try:
+        socket.getaddrinfo("pool.ntp.org", 123)
+        return                              # DNS already works — leave it alone
+    except Exception:
+        pass
+    try:
+        ip, mask, gw, _ = _wlan.ifconfig()
+        _wlan.ifconfig((ip, mask, gw, fallback))
+        socket.getaddrinfo("pool.ntp.org", 123)   # verify the fallback resolves
+        print("wifi: DHCP DNS failed; using fallback DNS", fallback)
+    except Exception as e:
+        print("wifi: fallback DNS {} also failed: {}".format(fallback, e))
+
+
+def connect(ssid, password, timeout=15, retries=3, fallback_dns=""):
     """Attempt to join WiFi. Returns True if connected, False otherwise.
 
     Never raises on failure — the caller decides what to do offline.
@@ -35,6 +60,7 @@ def connect(ssid, password, timeout=15, retries=3):
 
     if _wlan.isconnected():
         print("wifi: already connected, IP =", _wlan.ifconfig()[0])
+        _ensure_dns(fallback_dns)
         return True
 
     for attempt in range(1, retries + 1):
@@ -52,6 +78,7 @@ def connect(ssid, password, timeout=15, retries=3):
 
         if _wlan.isconnected():
             print("wifi: connected, IP =", _wlan.ifconfig()[0])
+            _ensure_dns(fallback_dns)
             return True
         print("wifi: attempt {} timed out".format(attempt))
 

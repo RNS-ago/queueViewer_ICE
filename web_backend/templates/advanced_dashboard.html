@@ -27,6 +27,19 @@
     nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 12px 0 4px; }
     nav.tabs a { padding: 8px 16px; color: #aaa; border-bottom: 2px solid transparent; }
     nav.tabs a.active { color: #4FC3F7; border-bottom-color: #4FC3F7; }
+    .status { margin: 24px 0; }
+    .status h2 { font-size: .8rem; color: #888; text-transform: uppercase;
+                 letter-spacing: .08em; margin: 0 0 10px; }
+    .status table { border-collapse: collapse; width: 100%; max-width: 560px; }
+    .status td, .status th { padding: 8px 12px; text-align: left;
+                             border-bottom: 1px solid #2a2a2a; font-size: .9rem; }
+    .status th { color: #777; font-weight: 600; font-size: .75rem;
+                 text-transform: uppercase; letter-spacing: .06em; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+           margin-right: 8px; vertical-align: middle; }
+    .dot.on { background: #66BB6A; box-shadow: 0 0 6px #66BB6A; }
+    .dot.off { background: #555; }
+    .status .seen { color: #aaa; }
   </style>
 </head>
 <body>
@@ -72,7 +85,41 @@
 
     <div id="chart"></div>
     <p class="muted">Showing latest records for <b>{{ title|default:"(nothing selected)" }}</b>. Auto-refreshes every 30s.</p>
+
+    {% if sensor_statuses %}
+    <div class="status">
+      <h2>Sensor status</h2>
+      <table>
+        <thead><tr><th>Sensor</th><th>Status</th><th>Last seen</th></tr></thead>
+        <tbody>
+          {% for s in sensor_statuses %}
+          <tr>
+            <td>{{ s.device_id }}</td>
+            <td><span class="dot {% if s.online %}on{% else %}off{% endif %}"></span>{% if s.online %}Online{% else %}Offline{% endif %}</td>
+            <td class="seen" data-last-seen="{{ s.last_seen|default:'' }}">{% if s.last_seen %}…{% else %}never{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
   </div>
+
+  <script>
+    // Turn each sensor's last-seen ISO timestamp into a "x ago" label. Computed
+    // client-side so it stays accurate between the page's 30s auto-refreshes.
+    function relativeTime(iso) {
+      const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+      if (secs < 60)    return Math.round(secs) + "s ago";
+      if (secs < 3600)  return Math.round(secs / 60) + "m ago";
+      if (secs < 86400) return Math.round(secs / 3600) + "h ago";
+      return Math.round(secs / 86400) + "d ago";
+    }
+    document.querySelectorAll(".seen[data-last-seen]").forEach(td => {
+      const iso = td.getAttribute("data-last-seen");
+      if (iso) td.textContent = relativeTime(iso);
+    });
+  </script>
 
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
   <script id="boots-data" type="application/json">{{ boots_json|safe }}</script>

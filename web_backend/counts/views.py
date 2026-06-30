@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db.models import Max
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.dateparse import parse_datetime
@@ -189,6 +190,37 @@ def _devices():
     )
 
 
+# A sensor sends a heartbeat snapshot every SNAPSHOT_EVERY=60s (esp32/src/config.py),
+# so anything silent for a few cycles is effectively offline. The buffer can flush
+# late after a network blip, so we allow some slack.
+_ONLINE_AFTER = timedelta(minutes=3)
+
+
+def _sensor_statuses():
+    """One row per sensor: when it last reported and whether it's online.
+
+    `last_seen` is the most recent `received_at` (server receipt time, the only
+    clock we trust for liveness — device `ts` may be a pre-NTP uptime marker).
+    `online` is True if that was within _ONLINE_AFTER; `ago_seconds` is how long
+    ago, for a human-friendly "x ago" label rendered client-side.
+    """
+    now = datetime.now(timezone.utc)
+    rows = (
+        CountRecord.objects.values("device_id")
+        .annotate(last_seen=Max("received_at"))
+        .order_by("device_id")
+    )
+    statuses = []
+    for r in rows:
+        last_seen = r["last_seen"]
+        statuses.append({
+            "device_id": r["device_id"],
+            "last_seen": last_seen.isoformat() if last_seen else None,
+            "online": last_seen is not None and (now - last_seen) <= _ONLINE_AFTER,
+        })
+    return statuses
+
+
 def _latest(device_id):
     r = CountRecord.objects.filter(device_id=device_id).order_by("-received_at", "-pk").first()
     if r is None:
@@ -303,6 +335,7 @@ def _dashboard_context(request):
         "cmax": cmax,
         "latest": latest,
         "total_records": CountRecord.objects.count(),
+        "sensor_statuses": _sensor_statuses(),
     }
 
 

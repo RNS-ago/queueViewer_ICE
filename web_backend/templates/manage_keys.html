@@ -4,116 +4,244 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API keys — staff dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Preload the two latin woff2 files so the fonts are ready by first paint
+       (block hides text until then, so no fallback-then-swap reflow). -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isfFJU.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/sharetechmono/v16/J7aHnp1uDWRBEqV98dVQztYldFcLowEF.woff2">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=block" rel="stylesheet">
   <style>
-    html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
-                 font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
-    header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-    h1 { font-size: 1.2rem; margin: 0; }
-    a { color: #4FC3F7; text-decoration: none; }
-    .muted { color: #777; font-size: .85rem; }
-    nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 12px 0 16px; }
-    nav.tabs a { padding: 8px 16px; color: #aaa; border-bottom: 2px solid transparent; }
-    nav.tabs a.active { color: #4FC3F7; border-bottom-color: #4FC3F7; }
-    .msg { padding: 10px 14px; border-radius: 8px; margin: 8px 0; font-size: .9rem; word-break: break-all; }
-    .msg.warning { background: #2c2410; border: 1px solid #6b5a1e; color: #ffd479; }
-    .msg.success { background: #102c16; border: 1px solid #1e6b32; color: #79ffa0; }
-    .msg.error   { background: #2c1010; border: 1px solid #6b1e1e; color: #ff9a9a; }
-    .card { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #2a2a2a; font-size: .9rem; }
-    th { color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; font-size: .72rem; }
-    code { background: #111; padding: 2px 6px; border-radius: 4px; color: #4FC3F7; }
-    .pill { padding: 2px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; }
-    .pill.on { background: #102c16; color: #79ffa0; } .pill.off { background: #2c1010; color: #ff9a9a; }
-    input[type=text] { background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; min-width: 220px; }
-    button { border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 600; }
-    button.primary { background: #4FC3F7; color: #062a38; }
-    button.warn { background: #5a3a12; color: #ffd479; }
-    button.danger { background: #5a1212; color: #ff9a9a; }
-    button.ok { background: #12502a; color: #79ffa0; }
+    :root {
+      --green:  #5dff7b;
+      --green-d:#1f7a35;
+      --amber:  #ffb22e;
+      --red:    #ff2a2a;
+      --hazard: #ffd200;
+      --screen: #030a05;
+      --metal-l:#e9ecf1;
+      --metal:  #b4bac4;
+      --metal-d:#6b7079;
+      --bolt:   #4a4f57;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    body {
+      font-family: "Share Tech Mono", "Courier New", monospace;
+      background:
+        radial-gradient(60% 50% at 50% 0%, #15171c, #000 70%),
+        repeating-linear-gradient(0deg, #050608 0 2px, #000 2px 4px) #000;
+      color: #cfd4dc;
+      padding: clamp(12px, 3vw, 32px);
+    }
+    .stage { width: 100%; max-width: clamp(320px, 96vw, 1180px); margin: 0 auto; }
+
+    /* Brushed-metal console shell */
+    .console {
+      position: relative; border-radius: 16px; padding: clamp(12px, 2vw, 18px);
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, rgba(0,0,0,.05) 1px 2px),
+        linear-gradient(90deg, var(--metal-l) 0%, var(--metal) 45%, var(--metal-d) 80%, #8a9099 100%);
+      border: 2px solid #f2f4f8;
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.9), inset 0 -6px 14px rgba(0,0,0,.45),
+        inset 6px 0 14px rgba(0,0,0,.18), inset -6px 0 14px rgba(0,0,0,.18),
+        0 22px 50px rgba(0,0,0,.7);
+    }
+    .rivet { position: absolute; width: 16px; height: 16px; border-radius: 50%;
+             background: radial-gradient(circle at 35% 30%, #fdfdff, var(--bolt) 70%, #2a2d33);
+             box-shadow: inset 0 1px 1px rgba(255,255,255,.8), 0 1px 2px rgba(0,0,0,.6); }
+    .rivet.tl { top: 8px; left: 8px; } .rivet.tr { top: 8px; right: 8px; }
+    .rivet.bl { bottom: 8px; left: 8px; } .rivet.br { bottom: 8px; right: 8px; }
+
+    /* min-height matches the dashboard's header band (whose dropdown makes it
+       taller than a bare button) so the header stays consistent across tabs. */
+    .topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: 4px 14px 12px; min-height: 34px; }
+    .nameplate {
+      font-family: "Share Tech Mono", monospace; font-weight: 700; letter-spacing: .12em;
+      font-size: clamp(.78rem, 2.2vw, 1.05rem); text-transform: uppercase; color: #2c3038;
+      text-shadow: 0 1px 0 rgba(255,255,255,.85), 0 -1px 0 rgba(0,0,0,.35);
+    }
+    .leds { display: flex; flex-wrap: wrap; gap: 6px; max-width: 240px; }
+    .leds i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #1a1d22; background: #2c7a3a; box-shadow: inset 0 0 2px #000; }
+    .leds i.on { background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%); box-shadow: 0 0 9px var(--green); }
+    .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .who { font-family: "VT323", monospace; font-size: 1.1rem; color: #3a3f47; letter-spacing: .04em; }
+    /* Header logout matches the dashboard's compact control sizing. */
+    .btn { font-size: 1.05rem; padding: 4px 10px; border-radius: 4px; margin: 0; }
+
+    .hazard { height: 10px; margin: 0 14px 12px; border-radius: 3px;
+      background: repeating-linear-gradient(45deg, var(--hazard) 0 12px, #15161a 12px 24px);
+      box-shadow: inset 0 0 4px rgba(0,0,0,.6); }
+
+    nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 14px 14px; }
+    nav.tabs a { font-family: "VT323", monospace; font-size: 1.15rem; letter-spacing: .05em;
+                 padding: 5px 16px; color: var(--green-d); text-decoration: none;
+                 border: 1px solid #0a0b0d; border-radius: 6px 6px 0 0;
+                 background: linear-gradient(180deg, #20242a, #14161a); }
+    nav.tabs a:hover { color: var(--green); }
+    nav.tabs a.active { color: var(--screen); background: linear-gradient(180deg, #9fffb4, var(--green));
+                        border-color: #0a3a18; box-shadow: 0 0 12px rgba(93,255,123,.5); }
+
+    /* Alert message plates */
+    .msg { margin: 0 14px 12px; padding: 10px 14px; border-radius: 8px; font-family: "VT323", monospace;
+           font-size: 1.15rem; letter-spacing: .02em; word-break: break-all; }
+    .msg.warning { background: #1f1607; border: 1px solid #7a5410; color: var(--amber); }
+    .msg.success { background: #06210f; border: 1px solid var(--green-d); color: var(--green); }
+    .msg.error   { background: #1f0808; border: 1px solid #7a1e1e; color: #ff8a8a; }
+
+    /* CRT bezel panels */
+    .bezel {
+      position: relative; border-radius: 12px; margin: 0 14px 14px; padding: clamp(14px, 2.2vw, 20px);
+      background: radial-gradient(120% 120% at 50% 0%, #0a1f12 0%, var(--screen) 72%);
+      border: 3px solid #0c0f0d;
+      box-shadow: inset 0 0 50px rgba(0,0,0,.9), inset 0 0 22px rgba(45,255,120,.10),
+                  0 0 0 3px #2a2d31, 0 0 0 5px #cfd4da;
+      color: var(--green); text-shadow: 0 0 6px rgba(93,255,123,.5);
+    }
+    h2 { margin: 0 0 8px; font-family: "VT323", monospace; font-size: 1.3rem; color: var(--green);
+         text-transform: uppercase; letter-spacing: .1em; }
+    .muted { color: var(--green-d); font-size: 1rem; font-family: "VT323", monospace; letter-spacing: .02em; }
+
+    /* Terminal form controls */
+    input[type=text] {
+      font-family: "VT323", monospace; font-size: 1.1rem; color: var(--green);
+      background: #021006; border: 1px solid var(--green-d); border-radius: 4px; padding: 6px 10px;
+      outline: none; text-shadow: 0 0 6px rgba(93,255,123,.5); margin: 4px 4px 4px 0; min-width: 220px;
+    }
+    input::placeholder { color: #2f7a45; }
+    input:focus { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.45); }
+
+    button {
+      font-family: "VT323", monospace; font-size: 1.1rem; letter-spacing: .04em; cursor: pointer;
+      border-radius: 6px; padding: 6px 14px; border: 1px solid var(--green-d);
+      color: var(--green); background: #021006; text-shadow: 0 0 6px rgba(93,255,123,.5); margin: 4px 0;
+    }
+    button:hover { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.4); color: #d8ffe1; }
+    button.primary, button.ok { background: linear-gradient(180deg, #9fffb4, var(--green)); color: var(--screen);
+                                border-color: #0a3a18; text-shadow: none; font-weight: 700; }
+    button.primary:hover, button.ok:hover { box-shadow: 0 0 12px rgba(93,255,123,.55); color: var(--screen); }
+    button.warn { background: #2a1f08; color: var(--amber); border-color: #7a5410; text-shadow: 0 0 6px rgba(255,178,46,.4); }
+    button.warn:hover { border-color: var(--amber); box-shadow: 0 0 8px rgba(255,178,46,.45); color: #ffd79a; }
+    button.danger { background: #2a0c0c; color: #ff8a8a; border-color: #7a1e1e; text-shadow: 0 0 6px rgba(255,80,80,.4); }
+    button.danger:hover { border-color: #ff6464; box-shadow: 0 0 8px rgba(255,80,80,.45); color: #ffb0b0; }
+
+    code { font-family: "VT323", monospace; background: #021006; border: 1px solid #103a1d;
+           color: var(--green); padding: 2px 8px; border-radius: 4px; font-size: 1rem; }
+    .pill { padding: 2px 10px; border-radius: 999px; font-size: .92rem; font-weight: 700; font-family: "VT323", monospace; }
+    .pill.on { background: #06210f; color: var(--green); border: 1px solid var(--green-d); }
+    .pill.off { background: #2a0c0c; color: #ff8a8a; border: 1px solid #7a1e1e; }
+
+    table { width: 100%; border-collapse: collapse; font-family: "VT323", monospace; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #103a1d; font-size: 1.1rem; }
+    th { color: var(--green-d); font-weight: 400; text-transform: uppercase; letter-spacing: .06em; font-size: .95rem; }
+    td { color: var(--green); }
+    td.muted { color: var(--green-d); }
     form.inline { display: inline; }
+
+    .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 14px 4px;
+                 padding: 8px 12px; border-radius: 7px; font-family: "VT323", monospace;
+                 background: linear-gradient(180deg, #2a2d33, #15171b);
+                 border: 1px solid #0a0b0d; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+    .statusbar .conn { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; letter-spacing: .08em; color: #8a9aa0; }
+    .statusbar .ledpulse { width: 10px; height: 10px; border-radius: 50%;
+                           background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%);
+                           box-shadow: 0 0 8px var(--green); animation: blink 1.6s steps(2) infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    .statusbar .note { font-size: 1.1rem; color: var(--green); letter-spacing: .04em; text-shadow: 0 0 6px rgba(93,255,123,.5); }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Queue counter — staff dashboard</h1>
-      <div>
-        <span class="muted">· {{ user.username }} ·</span>
-        <form action="{% url 'logout' %}" method="post" class="inline">
-          {% csrf_token %}<button type="submit">Log out</button>
+  <div class="stage">
+    <div class="console">
+      <span class="rivet tl"></span><span class="rivet tr"></span>
+      <span class="rivet bl"></span><span class="rivet br"></span>
+
+      <div class="topbar">
+        <div class="nameplate">I.C.E. · Key Vault</div>
+        <div class="leds"><i class="on"></i><i></i><i class="on"></i><i class="on"></i></div>
+        <div class="controls">
+          <span class="who">{{ user.username }}</span>
+          <form action="{% url 'logout' %}" method="post" class="inline">
+            {% csrf_token %}<button class="btn" type="submit">Log out</button>
+          </form>
+        </div>
+      </div>
+      <div class="hazard"></div>
+
+      <nav class="tabs">
+        <a href="{% url 'advanced_dashboard' %}">Dashboard</a>
+        <a href="{% url 'manage_zones' %}">Zones</a>
+        <a class="active" href="{% url 'manage_keys' %}">API keys</a>
+      </nav>
+
+      {% for message in messages %}
+        <div class="msg {{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+
+      <div class="bezel">
+        <h2>// Create a new key</h2>
+        <p class="muted">The full key is shown once, right after creation. Set it as
+          <code>AUTH_TOKEN</code> in the device's <code>config.py</code>.</p>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create">
+          <input type="text" name="name" placeholder="Device / client name, e.g. entrance-01" required>
+          <button class="primary" type="submit">Create key</button>
         </form>
       </div>
-    </header>
 
-    <nav class="tabs">
-      <a href="{% url 'advanced_dashboard' %}">Dashboard</a>
-      <a href="{% url 'manage_zones' %}">Zones</a>
-      <a class="active" href="{% url 'manage_keys' %}">API keys</a>
-    </nav>
-
-    {% for message in messages %}
-      <div class="msg {{ message.tags }}">{{ message }}</div>
-    {% endfor %}
-
-    <div class="card">
-      <h2 style="margin-top:0;font-size:1rem">Create a new key</h2>
-      <p class="muted">The full key is shown once, right after creation. Set it as
-        <code>AUTH_TOKEN</code> in the device's <code>config.py</code>.</p>
-      <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="create">
-        <input type="text" name="name" placeholder="Device / client name, e.g. entrance-01" required>
-        <button class="primary" type="submit">Create key</button>
-      </form>
-    </div>
-
-    <div class="card">
-      <h2 style="margin-top:0;font-size:1rem">Existing keys</h2>
-      {% if keys %}
-      <table>
-        <thead>
-          <tr><th>Name</th><th>Prefix</th><th>Status</th><th>Created</th><th>Last used</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {% for key in keys %}
-          <tr>
-            <td>{{ key.name }}</td>
-            <td><code>{{ key.prefix }}…</code></td>
-            <td>
-              {% if key.active %}<span class="pill on">active</span>
-              {% else %}<span class="pill off">revoked</span>{% endif %}
-            </td>
-            <td class="muted">{{ key.created_at|date:"Y-m-d H:i" }}</td>
-            <td class="muted">{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d H:i" }}{% else %}never{% endif %}</td>
-            <td>
-              {% if key.active %}
-                <form method="post" class="inline">{% csrf_token %}
-                  <input type="hidden" name="action" value="revoke">
+      <div class="bezel">
+        <h2>// Existing keys</h2>
+        {% if keys %}
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Prefix</th><th>Status</th><th>Created</th><th>Last used</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for key in keys %}
+            <tr>
+              <td>{{ key.name }}</td>
+              <td><code>{{ key.prefix }}…</code></td>
+              <td>
+                {% if key.active %}<span class="pill on">active</span>
+                {% else %}<span class="pill off">revoked</span>{% endif %}
+              </td>
+              <td class="muted">{{ key.created_at|date:"Y-m-d H:i" }}</td>
+              <td class="muted">{% if key.last_used_at %}{{ key.last_used_at|date:"Y-m-d H:i" }}{% else %}never{% endif %}</td>
+              <td>
+                {% if key.active %}
+                  <form method="post" class="inline">{% csrf_token %}
+                    <input type="hidden" name="action" value="revoke">
+                    <input type="hidden" name="pk" value="{{ key.pk }}">
+                    <button class="warn" type="submit">Revoke</button>
+                  </form>
+                {% else %}
+                  <form method="post" class="inline">{% csrf_token %}
+                    <input type="hidden" name="action" value="activate">
+                    <input type="hidden" name="pk" value="{{ key.pk }}">
+                    <button class="ok" type="submit">Re-activate</button>
+                  </form>
+                {% endif %}
+                <form method="post" class="inline" onsubmit="return confirm('Delete this key permanently?');">{% csrf_token %}
+                  <input type="hidden" name="action" value="delete">
                   <input type="hidden" name="pk" value="{{ key.pk }}">
-                  <button class="warn" type="submit">Revoke</button>
+                  <button class="danger" type="submit">Delete</button>
                 </form>
-              {% else %}
-                <form method="post" class="inline">{% csrf_token %}
-                  <input type="hidden" name="action" value="activate">
-                  <input type="hidden" name="pk" value="{{ key.pk }}">
-                  <button class="ok" type="submit">Re-activate</button>
-                </form>
-              {% endif %}
-              <form method="post" class="inline" onsubmit="return confirm('Delete this key permanently?');">{% csrf_token %}
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="pk" value="{{ key.pk }}">
-                <button class="danger" type="submit">Delete</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-        <p class="muted">No API keys yet. Create one above so a device can post to <code>/api/log</code>.</p>
-      {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+          <p class="muted">No API keys yet. Create one above so a device can post to <code>/api/log</code>.</p>
+        {% endif %}
+      </div>
+
+      <div class="statusbar">
+        <span class="conn"><span class="ledpulse"></span>CONNECTION</span>
+        <span class="note">staff terminal · key vault</span>
+      </div>
     </div>
   </div>
 </body>

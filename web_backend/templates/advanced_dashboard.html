@@ -4,112 +4,311 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Queue counter — staff dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Preload the two latin woff2 files so the fonts are ready by first paint
+       (block hides text until then, so no fallback-then-swap reflow). -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isfFJU.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/sharetechmono/v16/J7aHnp1uDWRBEqV98dVQztYldFcLowEF.woff2">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=block" rel="stylesheet">
   <!-- defer: Plotly is ~4.5 MB; loading it render-blocking in <head> stalls the
        whole page on a slow uplink (the body never paints). Deferred, the page
        renders immediately and the chart fills in once Plotly is ready. -->
   <script src="https://cdn.plot.ly/plotly-3.0.0.min.js" charset="utf-8" defer></script>
   <style>
-    html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
-                 font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
-    header { display: flex; align-items: center; justify-content: space-between;
-             flex-wrap: wrap; gap: 12px; }
-    h1 { font-size: 1.2rem; margin: 0; }
-    .cards { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
-    .card { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px;
-            padding: 16px 20px; min-width: 120px; }
-    .card .v { font-size: 2rem; font-weight: 700; }
-    .card .l { color: #888; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; }
-    .occ .v { color: #4FC3F7; } .in .v { color: #66BB6A; } .out .v { color: #FF7043; }
-    select, a.btn { background: #1c1c1c; color: #e0e0e0; border: 1px solid #333;
-                    border-radius: 6px; padding: 6px 10px; }
-    a { color: #4FC3F7; text-decoration: none; }
-    .muted { color: #777; font-size: .85rem; }
-    #chart { width: 100%; }
-    nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 12px 0 4px; }
-    nav.tabs a { padding: 8px 16px; color: #aaa; border-bottom: 2px solid transparent; }
-    nav.tabs a.active { color: #4FC3F7; border-bottom-color: #4FC3F7; }
-    .status { margin: 24px 0; }
-    .status h2 { font-size: .8rem; color: #888; text-transform: uppercase;
-                 letter-spacing: .08em; margin: 0 0 10px; }
-    .status table { border-collapse: collapse; width: 100%; max-width: 560px; }
-    .status td, .status th { padding: 8px 12px; text-align: left;
-                             border-bottom: 1px solid #2a2a2a; font-size: .9rem; }
-    .status th { color: #777; font-weight: 600; font-size: .75rem;
-                 text-transform: uppercase; letter-spacing: .06em; }
-    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-           margin-right: 8px; vertical-align: middle; }
-    .dot.on { background: #66BB6A; box-shadow: 0 0 6px #66BB6A; }
-    .dot.off { background: #555; }
-    .status .seen { color: #aaa; }
+    :root {
+      --green:  #5dff7b;
+      --green-d:#1f7a35;
+      --amber:  #ffb22e;
+      --red:    #ff2a2a;
+      --hazard: #ffd200;
+      --screen: #030a05;
+      --metal-l:#e9ecf1;
+      --metal:  #b4bac4;
+      --metal-d:#6b7079;
+      --bolt:   #4a4f57;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    body {
+      font-family: "Share Tech Mono", "Courier New", monospace;
+      background:
+        radial-gradient(60% 50% at 50% 0%, #15171c, #000 70%),
+        repeating-linear-gradient(0deg, #050608 0 2px, #000 2px 4px) #000;
+      color: #cfd4dc;
+      padding: clamp(12px, 3vw, 32px);
+    }
+    .stage { width: 100%; max-width: clamp(320px, 96vw, 1180px); margin: 0 auto; }
+
+    /* ----- Brushed-metal console shell ----- */
+    .console {
+      position: relative; border-radius: 16px; padding: clamp(12px, 2vw, 18px);
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, rgba(0,0,0,.05) 1px 2px),
+        linear-gradient(90deg, var(--metal-l) 0%, var(--metal) 45%, var(--metal-d) 80%, #8a9099 100%);
+      border: 2px solid #f2f4f8;
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.9), inset 0 -6px 14px rgba(0,0,0,.45),
+        inset 6px 0 14px rgba(0,0,0,.18), inset -6px 0 14px rgba(0,0,0,.18),
+        0 22px 50px rgba(0,0,0,.7);
+    }
+    .rivet { position: absolute; width: 16px; height: 16px; border-radius: 50%;
+             background: radial-gradient(circle at 35% 30%, #fdfdff, var(--bolt) 70%, #2a2d33);
+             box-shadow: inset 0 1px 1px rgba(255,255,255,.8), 0 1px 2px rgba(0,0,0,.6); }
+    .rivet.tl { top: 8px; left: 8px; } .rivet.tr { top: 8px; right: 8px; }
+    .rivet.bl { bottom: 8px; left: 8px; } .rivet.br { bottom: 8px; right: 8px; }
+
+    /* Top engraved nameplate bar with controls */
+    /* min-height pins the header band so it stays identical across tabs,
+       whether or not the right-hand cluster includes the sector dropdown. */
+    .topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: 4px 14px 12px; min-height: 34px; }
+    .nameplate {
+      font-family: "Share Tech Mono", monospace; font-weight: 700; letter-spacing: .12em;
+      font-size: clamp(.78rem, 2.2vw, 1.05rem); text-transform: uppercase; color: #2c3038;
+      text-shadow: 0 1px 0 rgba(255,255,255,.85), 0 -1px 0 rgba(0,0,0,.35);
+    }
+    .leds { display: flex; flex-wrap: wrap; gap: 6px; max-width: 240px; }
+    .leds .led { width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 1px solid #1a1d22;
+                 background: #2c7a3a; box-shadow: inset 0 0 2px #000; cursor: pointer; transition: transform .1s; }
+    .leds .led:hover { transform: scale(1.25); }
+    .leds .led:focus-visible { outline: 1px solid var(--green); outline-offset: 2px; }
+    .leds .led.on { background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%);
+                    box-shadow: 0 0 9px var(--green); }
+    .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .who { font-family: "VT323", monospace; font-size: 1.1rem; color: #3a3f47; letter-spacing: .04em; }
+
+    /* Terminal-style form controls */
+    select, .btn {
+      font-family: "VT323", monospace; font-size: 1.05rem; color: var(--green);
+      background-color: #021006; border: 1px solid var(--green-d); border-radius: 4px;
+      padding: 4px 10px; outline: none; text-shadow: 0 0 6px rgba(93,255,123,.6); cursor: pointer;
+    }
+    select:focus, .btn:hover { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.45); color: #d8ffe1; }
+    /* Sector selector: CRT caret, themed option list, fixed width so it never
+       resizes the header when a longer/shorter zone or sensor is chosen. */
+    select {
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      padding-right: 28px; width: 13rem; max-width: 60vw; text-overflow: ellipsis;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M0 0h10L5 7z' fill='%235dff7b'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    select option, select optgroup { background: #021006; color: var(--green); }
+    select optgroup { color: var(--green-d); font-style: normal; }
+
+    /* Hazard stripe divider */
+    .hazard { height: 10px; margin: 0 14px 12px; border-radius: 3px;
+      background: repeating-linear-gradient(45deg, var(--hazard) 0 12px, #15161a 12px 24px);
+      box-shadow: inset 0 0 4px rgba(0,0,0,.6); }
+
+    /* Terminal tabs */
+    nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 14px 12px; }
+    nav.tabs a { font-family: "VT323", monospace; font-size: 1.15rem; letter-spacing: .05em;
+                 padding: 5px 16px; color: var(--green-d); text-decoration: none;
+                 border: 1px solid #0a0b0d; border-radius: 6px 6px 0 0;
+                 background: linear-gradient(180deg, #20242a, #14161a); }
+    nav.tabs a:hover { color: var(--green); }
+    nav.tabs a.active { color: var(--screen); background: linear-gradient(180deg, #9fffb4, var(--green));
+                        border-color: #0a3a18; text-shadow: none; box-shadow: 0 0 12px rgba(93,255,123,.5); }
+
+    /* ----- CRT bezel panels ----- */
+    .bezel {
+      position: relative; border-radius: 12px; overflow: hidden;
+      background: radial-gradient(120% 120% at 50% 0%, #0a1f12 0%, var(--screen) 72%);
+      border: 3px solid #0c0f0d;
+      box-shadow: inset 0 0 50px rgba(0,0,0,.9), inset 0 0 22px rgba(45,255,120,.10),
+                  0 0 0 3px #2a2d31, 0 0 0 5px #cfd4da;
+      color: var(--green); text-shadow: 0 0 6px rgba(93,255,123,.6);
+    }
+    /* Subtle scanlines for text panels (kept off the chart for legibility). */
+    .scan::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,.30) 0 1px, transparent 1px 3px);
+      animation: flick 7s steps(60) infinite;
+    }
+    @keyframes flick { 0%,97%,100% { opacity: .55; } 98% { opacity: .4; } 99% { opacity: .65; } }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    .panel { padding: clamp(12px, 2.2vw, 20px); margin: 0 14px 14px; }
+    .panel-content { position: relative; z-index: 2; font-family: "VT323", monospace; }
+
+    .readline { font-family: "VT323", monospace; font-size: clamp(1rem, 2.2vw, 1.25rem);
+                color: var(--green); opacity: .9; }
+    .readline .ok { color: var(--amber); }
+    .cursor { display: inline-block; width: .55ch; background: var(--green); margin-left: 2px;
+              animation: blink 1s steps(2) infinite; }
+
+    /* Readout gauges */
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+             gap: clamp(10px, 1.6vw, 16px); margin-top: 14px; }
+    .gauge { border: 1px solid var(--green-d); border-radius: 6px; padding: 12px 10px;
+             background: rgba(0,0,0,.35); box-shadow: inset 0 0 16px rgba(45,255,120,.1); }
+    .gauge .v { font-family: "VT323", monospace; font-size: clamp(2.2rem, 6vw, 3rem); line-height: 1;
+                color: #d8ffe1; text-shadow: 0 0 12px rgba(93,255,123,.85); }
+    .gauge .l { margin-top: 4px; font-size: clamp(.78rem, 1.8vw, .95rem); letter-spacing: .14em;
+                text-transform: uppercase; color: var(--green); }
+    .gauge.out { border-color: #7a5410; box-shadow: inset 0 0 16px rgba(255,178,46,.1); }
+    .gauge.out .v { color: #ffe0a8; text-shadow: 0 0 12px rgba(255,178,46,.85); }
+    .gauge.out .l { color: var(--amber); }
+    .gauge.dim .v { color: #bfe9c8; text-shadow: 0 0 8px rgba(93,255,123,.4); }
+    .gauge.dim .l { color: var(--green-d); }
+
+    /* Chart monitor */
+    .chart-panel { padding: clamp(8px, 1.4vw, 14px); margin: 0 14px 14px; }
+    #chart { width: 100%; position: relative; z-index: 2; }
+    .muted { color: var(--green-d); font-size: .95rem; font-family: "VT323", monospace; letter-spacing: .03em; }
+    .caption { display: inline-block; margin: 0 14px 14px; padding: 7px 12px; border-radius: 7px;
+               background: linear-gradient(180deg, #11140f, #0a0c08); border: 1px solid #0a0b0d;
+               box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+
+    /* Status table */
+    .status { margin: 0 14px 14px; }
+    .status h2 { font-family: "VT323", monospace; font-size: 1.15rem; color: var(--green);
+                 text-transform: uppercase; letter-spacing: .12em; margin: 0 0 10px; }
+    .status table { border-collapse: collapse; width: 100%; max-width: 620px; font-family: "VT323", monospace; }
+    .status td, .status th { padding: 7px 12px; text-align: left; border-bottom: 1px solid #103a1d; font-size: 1.1rem; }
+    .status th { color: var(--green-d); font-size: .95rem; text-transform: uppercase; letter-spacing: .08em; }
+    .status td { color: var(--green); }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
+    .dot.on { background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%); box-shadow: 0 0 8px var(--green); }
+    .dot.off { background: #4a2020; box-shadow: 0 0 6px rgba(255,42,42,.4); }
+    .status .seen { color: var(--green-d); }
+
+    /* Bottom status strip on the metal */
+    .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 14px 4px;
+                 padding: 8px 12px; border-radius: 7px; font-family: "VT323", monospace;
+                 background: linear-gradient(180deg, #2a2d33, #15171b);
+                 border: 1px solid #0a0b0d; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+    .statusbar .conn { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; letter-spacing: .08em; color: #8a9aa0; }
+    .statusbar .ledpulse { width: 10px; height: 10px; border-radius: 50%;
+                           background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%);
+                           box-shadow: 0 0 8px var(--green); animation: blink 1.6s steps(2) infinite; }
+    .statusbar .note { font-size: 1.15rem; color: var(--green); letter-spacing: .04em; text-shadow: 0 0 6px rgba(93,255,123,.5); }
+    .statusbar .target { margin-left: auto; font-size: 1rem; color: #5f6770; letter-spacing: .03em; }
+
+    /* Custom CRT dropdown — native <select> option lists can't be themed by CSS,
+       so the sector picker is a styled <details>. The summary is fixed-width so
+       the header never resizes when a longer/shorter label is selected. */
+    .crt-select { position: relative; display: inline-block; vertical-align: middle; }
+    .crt-select > summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-family: "VT323", monospace; font-size: 1.05rem; color: var(--green);
+      background: #021006; border: 1px solid var(--green-d); border-radius: 4px; padding: 4px 10px;
+      text-shadow: 0 0 6px rgba(93,255,123,.6); width: 13rem; max-width: 60vw; overflow: hidden;
+    }
+    .crt-select > summary::-webkit-details-marker { display: none; }
+    .crt-select > summary::after { content: "\25BE"; color: var(--green); }
+    .crt-select[open] > summary { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.4); }
+    .crt-select .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .crt-select .opts {
+      position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 100%;
+      max-width: calc(100vw - 28px);
+      background: #021006; border: 1px solid var(--green); border-radius: 4px; padding: 4px 0;
+      box-shadow: 0 10px 26px rgba(0,0,0,.7), 0 0 14px rgba(93,255,123,.3); max-height: 60vh; overflow: auto;
+    }
+    .crt-select .grp { padding: 6px 12px 2px; color: var(--green-d); font-size: .9rem;
+                       text-transform: uppercase; letter-spacing: .1em; }
+    .crt-select .opt {
+      display: block; width: 100%; text-align: left; background: none; border: 0; cursor: pointer;
+      font-family: "VT323", monospace; font-size: 1.05rem; color: var(--green); margin: 0;
+      padding: 5px 14px; text-decoration: none; white-space: nowrap; text-shadow: 0 0 6px rgba(93,255,123,.5);
+    }
+    .crt-select .opt:hover, .crt-select .opt:focus { background: rgba(93,255,123,.16); color: #d8ffe1; outline: none; box-shadow: none; }
+    .crt-select .opt.on { background: linear-gradient(180deg, #9fffb4, var(--green)); color: var(--screen); text-shadow: none; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Queue counter — staff dashboard</h1>
-      <div>
-        <form method="get" style="display:inline">
-          <select name="target" onchange="this.form.submit()">
-            {% if zones %}
-            <optgroup label="Zones">
-              {% for z in zones %}
-                <option value="zone:{{ z.slug }}" {% if target == "zone:"|add:z.slug %}selected{% endif %}>{{ z.name }} ({{ z.sensors.count }})</option>
-              {% endfor %}
-            </optgroup>
-            {% endif %}
-            <optgroup label="Sensors">
-              {% for d in devices %}
-                <option value="device:{{ d }}" {% if target == "device:"|add:d %}selected{% endif %}>{{ d }}</option>
-              {% endfor %}
-            </optgroup>
-          </select>
-        </form>
-        <span class="muted">· {{ user.username }} ·</span>
-        <form action="{% url 'logout' %}" method="post" style="display:inline">
-          {% csrf_token %}<button class="btn" type="submit">Log out</button>
-        </form>
-      </div>
-    </header>
+  <div class="stage">
+    <div class="console">
+      <span class="rivet tl"></span><span class="rivet tr"></span>
+      <span class="rivet bl"></span><span class="rivet br"></span>
 
-    <nav class="tabs">
-      <a class="active" href="{% url 'advanced_dashboard' %}{% if target %}?target={{ target }}{% endif %}">Dashboard</a>
-      {% if user.is_staff %}<a href="{% url 'manage_zones' %}">Zones</a>{% endif %}
-      {% if user.is_staff %}<a href="{% url 'manage_keys' %}">API keys</a>{% endif %}
-    </nav>
-
-    <div class="cards">
-      <div class="card occ"><div class="v" id="card-occupancy">{% if latest %}{{ latest.occupancy }}{% else %}—{% endif %}</div><div class="l">Occupancy</div></div>
-      <div class="card in"><div class="v" id="card-in">{% if latest %}{{ latest.in }}{% else %}—{% endif %}</div><div class="l">Total in</div></div>
-      <div class="card out"><div class="v" id="card-out">{% if latest %}{{ latest.out }}{% else %}—{% endif %}</div><div class="l">Total out</div></div>
-      <div class="card"><div class="v" id="card-total">{{ total_records }}</div><div class="l">Records stored</div></div>
-    </div>
-
-    <div id="chart"></div>
-    <p class="muted">Showing latest records for <b>{{ title|default:"(nothing selected)" }}</b>. Auto-refreshes every 30s.</p>
-
-    {% if sensor_statuses %}
-    <div class="status">
-      <h2>Sensor status</h2>
-      <table>
-        <thead><tr><th>Sensor</th><th>Status</th><th>Last seen</th></tr></thead>
-        <tbody id="status-body">
-          {% for s in sensor_statuses %}
-          <tr>
-            <td>{{ s.device_id }}</td>
-            <td><span class="dot {% if s.online %}on{% else %}off{% endif %}"></span>{% if s.online %}Online{% else %}Offline{% endif %}</td>
-            <td class="seen" data-last-seen="{{ s.last_seen|default:'' }}">{% if s.last_seen %}…{% else %}never{% endif %}</td>
-          </tr>
+      <div class="topbar">
+        <div class="nameplate">I.C.E. · Staff Terminal</div>
+        <div class="leds" role="group" aria-label="Quick sector select">
+          {% for z in zones %}
+          <button type="button" class="led{% if target == "zone:"|add:z.slug %} on{% endif %}" data-target="zone:{{ z.slug }}" title="{{ z.name }}" aria-label="{{ z.name }}" aria-pressed="{% if target == "zone:"|add:z.slug %}true{% else %}false{% endif %}"></button>
           {% endfor %}
-        </tbody>
-      </table>
+          {% for d in devices %}
+          <button type="button" class="led{% if target == "device:"|add:d %} on{% endif %}" data-target="device:{{ d }}" title="{{ d }}" aria-label="{{ d }}" aria-pressed="{% if target == "device:"|add:d %}true{% else %}false{% endif %}"></button>
+          {% endfor %}
+        </div>
+        <div class="controls">
+          <details class="crt-select">
+            <summary aria-label="Choose a zone or sensor"><span class="lbl">{{ title|default:"select sector…" }}</span></summary>
+            <div class="opts" role="listbox">
+              {% if zones %}
+              <div class="grp">Zones</div>
+              {% for z in zones %}
+                <a class="opt{% if target == "zone:"|add:z.slug %} on{% endif %}" href="?target=zone:{{ z.slug }}">{{ z.name }} ({{ z.sensors.count }})</a>
+              {% endfor %}
+              {% endif %}
+              <div class="grp">Sensors</div>
+              {% for d in devices %}
+                <a class="opt{% if target == "device:"|add:d %} on{% endif %}" href="?target=device:{{ d }}">{{ d }}</a>
+              {% endfor %}
+            </div>
+          </details>
+          <span class="who">{{ user.username }}</span>
+          <form action="{% url 'logout' %}" method="post" style="display:inline">
+            {% csrf_token %}<button class="btn" type="submit">Log out</button>
+          </form>
+        </div>
+      </div>
+      <div class="hazard"></div>
+
+      <nav class="tabs">
+        <a class="active" href="{% url 'advanced_dashboard' %}{% if target %}?target={{ target }}{% endif %}">Dashboard</a>
+        {% if user.is_staff %}<a href="{% url 'manage_zones' %}">Zones</a>{% endif %}
+        {% if user.is_staff %}<a href="{% url 'manage_keys' %}">API keys</a>{% endif %}
+      </nav>
+
+      <div class="bezel scan panel">
+        <div class="panel-content">
+          <div class="readline">&gt; I.C.E. // lidar crowd scan <span class="ok">ACTIVE</span><span class="cursor">&nbsp;</span></div>
+          <div class="cards">
+            <div class="gauge"><div class="v" id="card-occupancy">{% if latest %}{{ latest.occupancy }}{% else %}--{% endif %}</div><div class="l">Occupancy</div></div>
+            <div class="gauge"><div class="v" id="card-in">{% if latest %}{{ latest.in }}{% else %}--{% endif %}</div><div class="l">Total in</div></div>
+            <div class="gauge out"><div class="v" id="card-out">{% if latest %}{{ latest.out }}{% else %}--{% endif %}</div><div class="l">Total out</div></div>
+            <div class="gauge dim"><div class="v" id="card-total">{{ total_records }}</div><div class="l">Records stored</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bezel chart-panel">
+        <div id="chart"></div>
+      </div>
+      <p class="muted caption">&gt; readout for <b style="color:var(--amber)">{{ title|default:"(nothing selected)" }}</b> · auto-refresh 60s</p>
+
+      {% if sensor_statuses %}
+      <div class="bezel scan panel status">
+        <div class="panel-content">
+          <h2>// Sensor status</h2>
+          <table>
+            <thead><tr><th>Sensor</th><th>Status</th><th>Last seen</th></tr></thead>
+            <tbody id="status-body">
+              {% for s in sensor_statuses %}
+              <tr>
+                <td>{{ s.device_id }}</td>
+                <td><span class="dot {% if s.online %}on{% else %}off{% endif %}"></span>{% if s.online %}Online{% else %}Offline{% endif %}</td>
+                <td class="seen" data-last-seen="{{ s.last_seen|default:'' }}">{% if s.last_seen %}…{% else %}never{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="statusbar">
+        <span class="conn"><span class="ledpulse"></span>CONNECTION</span>
+        <span class="note">live feed · polling every 60s</span>
+        <span class="target">sector {{ title|default:"--" }}</span>
+      </div>
     </div>
-    {% endif %}
   </div>
 
   <script>
     // Turn each sensor's last-seen ISO timestamp into a "x ago" label. Computed
-    // client-side so it stays accurate between the page's 30s auto-refreshes.
+    // client-side so it stays accurate between the page's 60s auto-refreshes.
     function relativeTime(iso) {
       const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
       if (secs < 60)    return Math.round(secs) + "s ago";
@@ -118,7 +317,7 @@
       return Math.round(secs / 86400) + "d ago";
     }
     // Re-render every "x ago" label from its stored ISO timestamp. Driven by a
-    // 1s ticker so the counter ticks live between the 30s data polls.
+    // 1s ticker so the counter ticks live between the 60s data polls.
     function tickSeen() {
       document.querySelectorAll(".seen[data-last-seen]").forEach(td => {
         const iso = td.getAttribute("data-last-seen");
@@ -154,6 +353,22 @@
     }
   </script>
 
+  <script>
+    // The LED row mirrors the sector selector: each lit dot is the active target,
+    // and clicking any dot switches to that zone/sensor (same navigation as the menu).
+    document.querySelectorAll(".led[data-target]").forEach(led => {
+      led.addEventListener("click", () => {
+        location.href = "?target=" + encodeURIComponent(led.getAttribute("data-target"));
+      });
+    });
+    // Close the CRT dropdown when clicking anywhere outside it.
+    document.addEventListener("click", e => {
+      document.querySelectorAll("details.crt-select[open]").forEach(d => {
+        if (!d.contains(e.target)) d.removeAttribute("open");
+      });
+    });
+  </script>
+
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
   <script id="boots-data" type="application/json">{{ boots_json|safe }}</script>
   <script>
@@ -161,7 +376,10 @@
    // reloading the page, so the ~4.5 MB Plotly bundle is parsed once (on first
    // load) and reused — refreshes become near-instant.
    const DATA_URL = "{% url 'advanced_dashboard_data' %}";
-   const GRID = "#283442", LINE = "#506784";
+   const CURRENT_TARGET = "{{ target|default:''|escapejs }}";
+   // I.C.E. green-phosphor chart theme, cohesive with the CRT panels.
+   const GRID = "#123a1f", LINE = "#1f7a35";
+   const C_OCC = "#5dff7b", C_IN = "#46e08f", C_OUT = "#ffb22e", C_BOOT = "#ff6464";
 
    // Build or refresh the chart in place. Mirrors visualize_counts.build_figure:
    // two stacked subplots (occupancy on top, cumulative in/out below), boot
@@ -171,48 +389,56 @@
     const chart = document.getElementById("chart");
     if (!series.length) {
       Plotly.purge(chart);
-      chart.innerHTML = '<p class="muted" style="padding:40px;text-align:center">No data yet.</p>';
+      chart.innerHTML = '<p class="muted" style="padding:40px;text-align:center">&gt; no data yet_</p>';
       return;
     }
     const x = series.map(r => r.x);
     const dtick = cmax <= 12 ? 1 : undefined;   // whole people only when the range is small
+    // Narrow viewports (phones) can't fit the desktop margins/legend/title sizing
+    // without everything colliding at the top, so scale those down on mobile.
+    const mobile = window.innerWidth < 640;
 
     const traces = [
       { x, y: series.map(r => r.occupancy), name: "occupancy", mode: "lines+markers",
-        line: { color: "#4FC3F7", width: 2, shape: "hv" }, marker: { size: 6, color: "#4FC3F7" },
-        fill: "tozeroy", fillcolor: "rgba(79,195,247,0.12)",
+        line: { color: C_OCC, width: 2, shape: "hv" }, marker: { size: 6, color: C_OCC },
+        fill: "tozeroy", fillcolor: "rgba(93,255,123,0.12)",
         hovertemplate: "%{x}<br>occupancy: %{y}<extra></extra>", xaxis: "x", yaxis: "y" },
       { x, y: series.map(r => r.in), name: "in (total)", mode: "lines+markers",
-        line: { color: "#66BB6A", width: 2 }, marker: { size: 6, color: "#66BB6A" },
+        line: { color: C_IN, width: 2 }, marker: { size: 6, color: C_IN },
         hovertemplate: "%{x}<br>in: %{y}<extra></extra>", xaxis: "x2", yaxis: "y2" },
       { x, y: series.map(r => r.out), name: "out (total)", mode: "lines+markers",
-        line: { color: "#FF7043", width: 2 }, marker: { size: 6, color: "#FF7043" },
+        line: { color: C_OUT, width: 2 }, marker: { size: 6, color: C_OUT },
         hovertemplate: "%{x}<br>out: %{y}<extra></extra>", xaxis: "x2", yaxis: "y2" },
     ];
 
     const annotations = [
       { text: "Occupancy (people inside)", x: 0.5, xref: "paper", y: 1.0, yref: "paper",
-        xanchor: "center", yanchor: "bottom", showarrow: false, font: { size: 16 } },
+        xanchor: "center", yanchor: "bottom", showarrow: false, font: { size: mobile ? 12 : 16, color: C_OCC } },
       { text: "Cumulative in / out per run", x: 0.5, xref: "paper", y: 0.455, yref: "paper",
-        xanchor: "center", yanchor: "bottom", showarrow: false, font: { size: 16 } },
+        xanchor: "center", yanchor: "bottom", showarrow: false, font: { size: mobile ? 12 : 16, color: C_OCC } },
     ];
     const shapes = [];
     boots.forEach(b => {
       ["x", "x2"].forEach(ax => shapes.push({
         type: "line", x0: b.x, x1: b.x, xref: ax,
         y0: 0, y1: 1, yref: (ax === "x" ? "y" : "y2") + " domain",
-        line: { color: "#FFB74D", width: 2, dash: "dash" },
+        line: { color: C_BOOT, width: 2, dash: "dash" },
       }));
       annotations.push({ text: b.label, x: b.x, xref: "x", y: 1.0, yref: "paper",
         xanchor: "left", yanchor: "bottom", showarrow: false,
-        font: { color: "#FFB74D", size: 11 }, bgcolor: "rgba(17,17,17,0.75)", borderpad: 2 });
+        font: { color: C_BOOT, size: mobile ? 9 : 11 }, bgcolor: "rgba(3,10,5,0.8)", borderpad: 2 });
     });
 
     const layout = {
-      title: { text: "Queue counter — " + title },
-      height: 720, hovermode: "x unified", margin: { t: 90 },
-      paper_bgcolor: "#111", plot_bgcolor: "#111", font: { color: "#e0e0e0" },
-      legend: { orientation: "h", yanchor: "bottom", y: 1.02, xanchor: "right", x: 1 },
+      title: { text: "I.C.E. // " + title, font: { size: mobile ? 15 : 20 } },
+      height: mobile ? 640 : 720, hovermode: "x unified",
+      // Tighter margins on mobile reclaim width for the plot; the legend drops
+      // below the chart so it stops fighting the title and subplot captions.
+      margin: mobile ? { t: 96, l: 46, r: 12, b: 78 } : { t: 90 },
+      paper_bgcolor: "#030a05", plot_bgcolor: "#030a05", font: { color: "#bfe9c8", family: "VT323, monospace" },
+      legend: mobile
+        ? { orientation: "h", yanchor: "top", y: -0.14, xanchor: "center", x: 0.5 }
+        : { orientation: "h", yanchor: "bottom", y: 1.02, xanchor: "right", x: 1 },
       xaxis: { domain: [0, 1], anchor: "y", matches: "x2", showticklabels: false,
                gridcolor: GRID, linecolor: LINE, zerolinecolor: GRID },
       yaxis: { domain: [0.545, 1.0], anchor: "x", title: { text: "people" },
@@ -243,12 +469,9 @@
     Plotly.react("chart", traces, layout, { responsive: true });
    }
 
-   // The selector value identifies the current zone/sensor; the poll forwards it
-   // so the JSON feed matches what's shown on screen.
-   function currentTarget() {
-     const sel = document.querySelector("select[name=target]");
-     return sel ? sel.value : "";
-   }
+   // The active target (set by the server for this page load) identifies the
+   // current zone/sensor; the poll forwards it so the JSON feed matches the view.
+   function currentTarget() { return CURRENT_TARGET; }
 
    // Pull fresh data and update the cards, status table and chart in place.
    async function refresh() {
@@ -257,9 +480,9 @@
                                 { headers: { "X-Requested-With": "fetch" } });
        if (!resp.ok) return;                    // keep the last good view on error
        const d = await resp.json();
-       document.getElementById("card-occupancy").textContent = d.latest ? d.latest.occupancy : "—";
-       document.getElementById("card-in").textContent        = d.latest ? d.latest.in        : "—";
-       document.getElementById("card-out").textContent       = d.latest ? d.latest.out       : "—";
+       document.getElementById("card-occupancy").textContent = d.latest ? d.latest.occupancy : "--";
+       document.getElementById("card-in").textContent        = d.latest ? d.latest.in        : "--";
+       document.getElementById("card-out").textContent       = d.latest ? d.latest.out       : "--";
        document.getElementById("card-total").textContent     = d.total_records;
        updateStatuses(d.sensor_statuses);
        drawChart(d.series, d.boots, d.cmax, d.title);
@@ -276,7 +499,7 @@
      );
      tickSeen();
      setInterval(tickSeen, 1000);
-     setInterval(refresh, 30000);
+     setInterval(refresh, 60000);
    });
   </script>
 </body>

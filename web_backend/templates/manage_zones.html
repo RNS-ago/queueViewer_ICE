@@ -4,135 +4,349 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Zones — staff dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Preload the two latin woff2 files so the fonts are ready by first paint
+       (block hides text until then, so no fallback-then-swap reflow). -->
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isfFJU.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/sharetechmono/v16/J7aHnp1uDWRBEqV98dVQztYldFcLowEF.woff2">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=block" rel="stylesheet">
   <style>
-    html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
-                 font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
-    header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
-    h1 { font-size: 1.2rem; margin: 0; }
-    a { color: #4FC3F7; text-decoration: none; }
-    .muted { color: #777; font-size: .85rem; }
-    nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid #2a2a2a; margin: 12px 0 16px; }
-    nav.tabs a { padding: 8px 16px; color: #aaa; border-bottom: 2px solid transparent; }
-    nav.tabs a.active { color: #4FC3F7; border-bottom-color: #4FC3F7; }
-    .msg { padding: 10px 14px; border-radius: 8px; margin: 8px 0; font-size: .9rem; word-break: break-all; }
-    .msg.warning { background: #2c2410; border: 1px solid #6b5a1e; color: #ffd479; }
-    .msg.success { background: #102c16; border: 1px solid #1e6b32; color: #79ffa0; }
-    .msg.error   { background: #2c1010; border: 1px solid #6b1e1e; color: #ff9a9a; }
-    .card { background: #1c1c1c; border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px 20px; margin: 16px 0; }
-    h2 { margin-top: 0; font-size: 1rem; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #2a2a2a; font-size: .9rem; vertical-align: top; }
-    th { color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; font-size: .72rem; }
-    code, .chip { background: #111; padding: 2px 8px; border-radius: 999px; color: #4FC3F7; font-size: .8rem; }
-    .chip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 4px 2px 0; }
-    .chip button { background: none; border: 0; color: #ff9a9a; cursor: pointer; font-size: .9rem; padding: 0; line-height: 1; }
-    input[type=text], select { background: #111; color: #e0e0e0; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; }
+    :root {
+      --green:  #5dff7b;
+      --green-d:#1f7a35;
+      --amber:  #ffb22e;
+      --red:    #ff2a2a;
+      --hazard: #ffd200;
+      --screen: #030a05;
+      --metal-l:#e9ecf1;
+      --metal:  #b4bac4;
+      --metal-d:#6b7079;
+      --bolt:   #4a4f57;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    body {
+      font-family: "Share Tech Mono", "Courier New", monospace;
+      background:
+        radial-gradient(60% 50% at 50% 0%, #15171c, #000 70%),
+        repeating-linear-gradient(0deg, #050608 0 2px, #000 2px 4px) #000;
+      color: #cfd4dc;
+      padding: clamp(12px, 3vw, 32px);
+    }
+    .stage { width: 100%; max-width: clamp(320px, 96vw, 1180px); margin: 0 auto; }
+
+    /* Brushed-metal console shell */
+    .console {
+      position: relative; border-radius: 16px; padding: clamp(12px, 2vw, 18px);
+      background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, rgba(0,0,0,.05) 1px 2px),
+        linear-gradient(90deg, var(--metal-l) 0%, var(--metal) 45%, var(--metal-d) 80%, #8a9099 100%);
+      border: 2px solid #f2f4f8;
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,.9), inset 0 -6px 14px rgba(0,0,0,.45),
+        inset 6px 0 14px rgba(0,0,0,.18), inset -6px 0 14px rgba(0,0,0,.18),
+        0 22px 50px rgba(0,0,0,.7);
+    }
+    .rivet { position: absolute; width: 16px; height: 16px; border-radius: 50%;
+             background: radial-gradient(circle at 35% 30%, #fdfdff, var(--bolt) 70%, #2a2d33);
+             box-shadow: inset 0 1px 1px rgba(255,255,255,.8), 0 1px 2px rgba(0,0,0,.6); }
+    .rivet.tl { top: 8px; left: 8px; } .rivet.tr { top: 8px; right: 8px; }
+    .rivet.bl { bottom: 8px; left: 8px; } .rivet.br { bottom: 8px; right: 8px; }
+
+    /* min-height matches the dashboard's header band (whose dropdown makes it
+       taller than a bare button) so the header stays consistent across tabs. */
+    .topbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: 4px 14px 12px; min-height: 34px; }
+    .nameplate {
+      font-family: "Share Tech Mono", monospace; font-weight: 700; letter-spacing: .12em;
+      font-size: clamp(.78rem, 2.2vw, 1.05rem); text-transform: uppercase; color: #2c3038;
+      text-shadow: 0 1px 0 rgba(255,255,255,.85), 0 -1px 0 rgba(0,0,0,.35);
+    }
+    .leds { display: flex; flex-wrap: wrap; gap: 6px; max-width: 240px; }
+    .leds i { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #1a1d22; background: #2c7a3a; box-shadow: inset 0 0 2px #000; }
+    .leds i.on { background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%); box-shadow: 0 0 9px var(--green); }
+    .controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+    .who { font-family: "VT323", monospace; font-size: 1.1rem; color: #3a3f47; letter-spacing: .04em; }
+    /* Header logout matches the dashboard's compact control sizing. */
+    .btn { font-size: 1.05rem; padding: 4px 10px; border-radius: 4px; margin: 0; }
+
+    .hazard { height: 10px; margin: 0 14px 12px; border-radius: 3px;
+      background: repeating-linear-gradient(45deg, var(--hazard) 0 12px, #15161a 12px 24px);
+      box-shadow: inset 0 0 4px rgba(0,0,0,.6); }
+
+    nav.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 14px 14px; }
+    nav.tabs a { font-family: "VT323", monospace; font-size: 1.15rem; letter-spacing: .05em;
+                 padding: 5px 16px; color: var(--green-d); text-decoration: none;
+                 border: 1px solid #0a0b0d; border-radius: 6px 6px 0 0;
+                 background: linear-gradient(180deg, #20242a, #14161a); }
+    nav.tabs a:hover { color: var(--green); }
+    nav.tabs a.active { color: var(--screen); background: linear-gradient(180deg, #9fffb4, var(--green));
+                        border-color: #0a3a18; box-shadow: 0 0 12px rgba(93,255,123,.5); }
+
+    /* Alert message plates */
+    .msg { margin: 0 14px 12px; padding: 10px 14px; border-radius: 8px; font-family: "VT323", monospace;
+           font-size: 1.15rem; letter-spacing: .02em; word-break: break-all; }
+    .msg.warning { background: #1f1607; border: 1px solid #7a5410; color: var(--amber); }
+    .msg.success { background: #06210f; border: 1px solid var(--green-d); color: var(--green); }
+    .msg.error   { background: #1f0808; border: 1px solid #7a1e1e; color: #ff8a8a; }
+
+    /* CRT bezel panels */
+    .bezel {
+      position: relative; border-radius: 12px; margin: 0 14px 14px; padding: clamp(14px, 2.2vw, 20px);
+      background: radial-gradient(120% 120% at 50% 0%, #0a1f12 0%, var(--screen) 72%);
+      border: 3px solid #0c0f0d;
+      box-shadow: inset 0 0 50px rgba(0,0,0,.9), inset 0 0 22px rgba(45,255,120,.10),
+                  0 0 0 3px #2a2d31, 0 0 0 5px #cfd4da;
+      color: var(--green); text-shadow: 0 0 6px rgba(93,255,123,.5);
+    }
+    h2 { margin: 0 0 8px; font-family: "VT323", monospace; font-size: 1.3rem; color: var(--green);
+         text-transform: uppercase; letter-spacing: .1em; }
+    .muted { color: var(--green-d); font-size: 1rem; font-family: "VT323", monospace; letter-spacing: .02em; }
+
+    /* Terminal form controls */
+    input[type=text], select {
+      font-family: "VT323", monospace; font-size: 1.1rem; color: var(--green);
+      background-color: #021006; border: 1px solid var(--green-d); border-radius: 4px; padding: 6px 10px;
+      outline: none; text-shadow: 0 0 6px rgba(93,255,123,.5); margin: 4px 4px 4px 0;
+    }
     input[type=text] { min-width: 220px; }
-    button { border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-weight: 600; }
-    button.primary { background: #4FC3F7; color: #062a38; }
-    button.danger { background: #5a1212; color: #ff9a9a; }
+    input::placeholder { color: #2f7a45; }
+    input:focus, select:focus { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.45); }
+    /* CRT caret + themed option list for the assign selectors. */
+    select {
+      appearance: none; -webkit-appearance: none; -moz-appearance: none; padding-right: 28px; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M0 0h10L5 7z' fill='%235dff7b'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+    }
+    select option, select optgroup { background: #021006; color: var(--green); }
+    select optgroup { color: var(--green-d); font-style: normal; }
+
+    button {
+      font-family: "VT323", monospace; font-size: 1.1rem; letter-spacing: .04em; cursor: pointer;
+      border-radius: 6px; padding: 6px 14px; border: 1px solid var(--green-d);
+      color: var(--green); background: #021006; text-shadow: 0 0 6px rgba(93,255,123,.5); margin: 4px 0;
+    }
+    button:hover { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.4); color: #d8ffe1; }
+    button.primary { background: linear-gradient(180deg, #9fffb4, var(--green)); color: var(--screen);
+                     border-color: #0a3a18; text-shadow: none; font-weight: 700; }
+    button.primary:hover { box-shadow: 0 0 12px rgba(93,255,123,.55); color: var(--screen); }
+    button.danger { background: #2a0c0c; color: #ff8a8a; border-color: #7a1e1e; text-shadow: 0 0 6px rgba(255,80,80,.4); }
+    button.danger:hover { border-color: #ff6464; box-shadow: 0 0 8px rgba(255,80,80,.45); color: #ffb0b0; }
+
+    /* Sensor chips + code */
+    code, .chip { font-family: "VT323", monospace; background: #021006; border: 1px solid #103a1d;
+                  color: var(--green); padding: 2px 8px; border-radius: 4px; font-size: 1rem; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; margin: 2px 4px 2px 0; border-radius: 999px; }
+    .chip button { background: none; border: 0; color: #ff8a8a; cursor: pointer; padding: 0; margin: 0;
+                   font-size: 1.1rem; line-height: 1; text-shadow: 0 0 6px rgba(255,80,80,.5); }
+    .chip button:hover { box-shadow: none; color: #ffb0b0; }
+
+    table { width: 100%; border-collapse: collapse; font-family: "VT323", monospace; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid #103a1d; font-size: 1.1rem; vertical-align: top; }
+    th { color: var(--green-d); font-weight: 400; text-transform: uppercase; letter-spacing: .06em; font-size: .95rem; }
+    td { color: var(--green); }
     form.inline { display: inline; }
+    /* On narrow screens the three columns (slug + chip + Delete) can't all fit,
+       and a horizontal scroll would hide the Delete button. So each zone row
+       becomes a stacked card with labelled fields, keeping Delete always visible. */
+    @media (max-width: 560px) {
+      .zones-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .zones-table, .zones-table tbody, .zones-table tr, .zones-table td { display: block; width: 100%; }
+      .zones-table tr { border: 1px solid #103a1d; border-radius: 8px; padding: 4px 10px 10px; margin-bottom: 12px; }
+      .zones-table td { border-bottom: 0; padding: 8px 0 0; }
+      .zones-table td::before { content: attr(data-label); display: block; color: var(--green-d);
+        font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; }
+    }
+
+    .statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 14px 4px;
+                 padding: 8px 12px; border-radius: 7px; font-family: "VT323", monospace;
+                 background: linear-gradient(180deg, #2a2d33, #15171b);
+                 border: 1px solid #0a0b0d; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+    .statusbar .conn { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; letter-spacing: .08em; color: #8a9aa0; }
+    .statusbar .ledpulse { width: 10px; height: 10px; border-radius: 50%;
+                           background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%);
+                           box-shadow: 0 0 8px var(--green); animation: blink 1.6s steps(2) infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+    .statusbar .note { font-size: 1.1rem; color: var(--green); letter-spacing: .04em; text-shadow: 0 0 6px rgba(93,255,123,.5); }
+
+    /* Custom CRT dropdown — native <select> option lists can't be themed by CSS. */
+    .crt-select { position: relative; display: inline-block; vertical-align: middle; margin: 4px 4px 4px 0; }
+    .crt-select > summary {
+      list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-family: "VT323", monospace; font-size: 1.1rem; color: var(--green);
+      background: #021006; border: 1px solid var(--green-d); border-radius: 4px; padding: 6px 10px;
+      text-shadow: 0 0 6px rgba(93,255,123,.5); width: 15rem; max-width: 70vw; overflow: hidden;
+    }
+    .crt-select > summary::-webkit-details-marker { display: none; }
+    .crt-select > summary::after { content: "\25BE"; color: var(--green); }
+    .crt-select[open] > summary { border-color: var(--green); box-shadow: 0 0 8px rgba(93,255,123,.45); }
+    .crt-select .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .crt-select.empty .lbl { color: #2f7a45; }
+    .crt-select .opts {
+      position: absolute; left: 0; top: calc(100% + 4px); z-index: 60; min-width: 100%;
+      background: #021006; border: 1px solid var(--green); border-radius: 4px; padding: 4px 0;
+      box-shadow: 0 10px 26px rgba(0,0,0,.7), 0 0 14px rgba(93,255,123,.3); max-height: 50vh; overflow: auto;
+    }
+    .crt-select .opt {
+      display: block; width: 100%; text-align: left; background: none; border: 0; cursor: pointer; margin: 0;
+      font-family: "VT323", monospace; font-size: 1.1rem; color: var(--green);
+      padding: 5px 14px; white-space: nowrap; text-shadow: 0 0 6px rgba(93,255,123,.5);
+    }
+    .crt-select .opt:hover, .crt-select .opt:focus { background: rgba(93,255,123,.16); color: #d8ffe1; outline: none; box-shadow: none; }
+    .crt-select .opt.on { background: linear-gradient(180deg, #9fffb4, var(--green)); color: var(--screen); text-shadow: none; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Queue counter — staff dashboard</h1>
-      <div>
-        <span class="muted">· {{ user.username }} ·</span>
-        <form action="{% url 'logout' %}" method="post" class="inline">
-          {% csrf_token %}<button type="submit">Log out</button>
+  <div class="stage">
+    <div class="console">
+      <span class="rivet tl"></span><span class="rivet tr"></span>
+      <span class="rivet bl"></span><span class="rivet br"></span>
+
+      <div class="topbar">
+        <div class="nameplate">I.C.E. · Zone Control</div>
+        <div class="leds"><i class="on"></i><i class="on"></i><i></i><i class="on"></i></div>
+        <div class="controls">
+          <span class="who">{{ user.username }}</span>
+          <form action="{% url 'logout' %}" method="post" class="inline">
+            {% csrf_token %}<button class="btn" type="submit">Log out</button>
+          </form>
+        </div>
+      </div>
+      <div class="hazard"></div>
+
+      <nav class="tabs">
+        <a href="{% url 'advanced_dashboard' %}">Dashboard</a>
+        <a class="active" href="{% url 'manage_zones' %}">Zones</a>
+        <a href="{% url 'manage_keys' %}">API keys</a>
+      </nav>
+
+      {% for message in messages %}
+        <div class="msg {{ message.tags }}">{{ message }}</div>
+      {% endfor %}
+
+      <div class="bezel">
+        <h2>// Create a zone</h2>
+        <p class="muted">A zone's occupancy is the sum of its sensors. Each sensor belongs to one zone.</p>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="create">
+          <input type="text" name="name" placeholder="Zone name, e.g. Main tent" required>
+          <button class="primary" type="submit">Create zone</button>
         </form>
       </div>
-    </header>
 
-    <nav class="tabs">
-      <a href="{% url 'advanced_dashboard' %}">Dashboard</a>
-      <a class="active" href="{% url 'manage_zones' %}">Zones</a>
-      <a href="{% url 'manage_keys' %}">API keys</a>
-    </nav>
-
-    {% for message in messages %}
-      <div class="msg {{ message.tags }}">{{ message }}</div>
-    {% endfor %}
-
-    <div class="card">
-      <h2>Create a zone</h2>
-      <p class="muted">A zone's occupancy is the sum of its sensors. Each sensor belongs to one zone.</p>
-      <form method="post">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="create">
-        <input type="text" name="name" placeholder="Zone name, e.g. Main tent" required>
-        <button class="primary" type="submit">Create zone</button>
-      </form>
-    </div>
-
-    <div class="card">
-      <h2>Zones</h2>
-      {% if zones %}
-      <table>
-        <thead>
-          <tr><th>Zone</th><th>Sensors</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-          {% for zone in zones %}
-          <tr>
-            <td><b>{{ zone.name }}</b><br><span class="muted">/?target=zone:{{ zone.slug }}</span></td>
-            <td>
-              {% for s in zone.sensors.all %}
-                <span class="chip">{{ s.device_id }}
-                  <form method="post" class="inline">{% csrf_token %}
-                    <input type="hidden" name="action" value="unassign">
-                    <input type="hidden" name="device_id" value="{{ s.device_id }}">
-                    <button type="submit" title="Remove from zone">×</button>
-                  </form>
-                </span>
-              {% empty %}
-                <span class="muted">No sensors yet.</span>
-              {% endfor %}
-            </td>
-            <td>
-              <form method="post" class="inline" onsubmit="return confirm('Delete this zone? Its sensors become unassigned.');">{% csrf_token %}
-                <input type="hidden" name="action" value="delete">
-                <input type="hidden" name="pk" value="{{ zone.pk }}">
-                <button class="danger" type="submit">Delete</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-        <p class="muted">No zones yet. Create one above.</p>
-      {% endif %}
-    </div>
-
-    <div class="card">
-      <h2>Assign a sensor</h2>
-      {% if zones %}
-        {% if unassigned %}
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="assign">
-            <select name="device_id" required>
-              <option value="" disabled selected>Choose a sensor…</option>
-              {% for d in unassigned %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-            </select>
-            <span class="muted">→</span>
-            <select name="zone" required>
-              {% for zone in zones %}<option value="{{ zone.pk }}">{{ zone.name }}</option>{% endfor %}
-            </select>
-            <button class="primary" type="submit">Assign</button>
-          </form>
-          <p class="muted">Sensors are the device_ids seen in incoming records. To move a sensor to a different zone, remove its chip above first, then assign it here.</p>
+      <div class="bezel">
+        <h2>// Zones</h2>
+        {% if zones %}
+        <table class="zones-table">
+          <thead>
+            <tr><th>Zone</th><th>Sensors</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for zone in zones %}
+            <tr>
+              <td data-label="Zone"><b>{{ zone.name }}</b><br><span class="muted">/?target=zone:{{ zone.slug }}</span></td>
+              <td data-label="Sensors">
+                {% for s in zone.sensors.all %}
+                  <span class="chip">{{ s.device_id }}
+                    <form method="post" class="inline">{% csrf_token %}
+                      <input type="hidden" name="action" value="unassign">
+                      <input type="hidden" name="device_id" value="{{ s.device_id }}">
+                      <button type="submit" title="Remove from zone">×</button>
+                    </form>
+                  </span>
+                {% empty %}
+                  <span class="muted">No sensors yet.</span>
+                {% endfor %}
+              </td>
+              <td data-label="Actions">
+                <form method="post" class="inline" onsubmit="return confirm('Delete this zone? Its sensors become unassigned.');">{% csrf_token %}
+                  <input type="hidden" name="action" value="delete">
+                  <input type="hidden" name="pk" value="{{ zone.pk }}">
+                  <button class="danger" type="submit">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
         {% else %}
-          <p class="muted">Every known sensor is already assigned to a zone.</p>
+          <p class="muted">No zones yet. Create one above.</p>
         {% endif %}
-      {% else %}
-        <p class="muted">Create a zone first.</p>
-      {% endif %}
+      </div>
+
+      <div class="bezel">
+        <h2>// Assign a sensor</h2>
+        {% if zones %}
+          {% if unassigned %}
+            <form method="post" class="assign-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="assign">
+              <input type="hidden" name="device_id">
+              <details class="crt-select empty" data-input="device_id">
+                <summary><span class="lbl">Choose a sensor…</span></summary>
+                <div class="opts">
+                  {% for d in unassigned %}<button type="button" class="opt" data-value="{{ d }}">{{ d }}</button>{% endfor %}
+                </div>
+              </details>
+              <span class="muted">→</span>
+              <input type="hidden" name="zone" value="{{ zones.0.pk }}">
+              <details class="crt-select" data-input="zone">
+                <summary><span class="lbl">{{ zones.0.name }}</span></summary>
+                <div class="opts">
+                  {% for zone in zones %}<button type="button" class="opt{% if forloop.first %} on{% endif %}" data-value="{{ zone.pk }}">{{ zone.name }}</button>{% endfor %}
+                </div>
+              </details>
+              <button class="primary" type="submit">Assign</button>
+            </form>
+            <p class="muted">Sensors are the device_ids seen in incoming records. To move a sensor to a different zone, remove its chip above first, then assign it here.</p>
+          {% else %}
+            <p class="muted">Every known sensor is already assigned to a zone.</p>
+          {% endif %}
+        {% else %}
+          <p class="muted">Create a zone first.</p>
+        {% endif %}
+      </div>
+
+      <div class="statusbar">
+        <span class="conn"><span class="ledpulse"></span>CONNECTION</span>
+        <span class="note">staff terminal · zone control</span>
+      </div>
     </div>
   </div>
+
+  <script>
+    // CRT dropdowns write the chosen value into the form's matching hidden input
+    // (native <select> option lists can't be themed), updating the summary label.
+    document.querySelectorAll(".crt-select[data-input] .opt").forEach(opt => {
+      opt.addEventListener("click", () => {
+        const dd = opt.closest(".crt-select");
+        const input = dd.parentElement.querySelector('input[name="' + dd.getAttribute("data-input") + '"]');
+        if (input) input.value = opt.getAttribute("data-value");
+        dd.querySelector(".lbl").textContent = opt.textContent;
+        dd.classList.remove("empty");
+        dd.querySelectorAll(".opt.on").forEach(o => o.classList.remove("on"));
+        opt.classList.add("on");
+        dd.removeAttribute("open");
+      });
+    });
+    // Block submit until a sensor is picked (hidden inputs ignore `required`).
+    document.querySelectorAll("form.assign-form").forEach(f => {
+      f.addEventListener("submit", e => {
+        const dev = f.querySelector('input[name="device_id"]');
+        if (!dev || !dev.value) {
+          e.preventDefault();
+          const s = f.querySelector('.crt-select[data-input="device_id"] > summary');
+          if (s) { s.style.borderColor = "var(--red)"; s.style.color = "#ff8a8a"; }
+        }
+      });
+    });
+    // Close any open CRT dropdown when clicking outside it.
+    document.addEventListener("click", e => {
+      document.querySelectorAll("details.crt-select[open]").forEach(d => {
+        if (!d.contains(e.target)) d.removeAttribute("open");
+      });
+    });
+  </script>
 </body>
 </html>

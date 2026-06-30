@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="30">
   <title>Queue counter — staff dashboard</title>
-  <script src="https://cdn.plot.ly/plotly-3.0.0.min.js" charset="utf-8"></script>
+  <!-- defer: Plotly is ~4.5 MB; loading it render-blocking in <head> stalls the
+       whole page on a slow uplink (the body never paints). Deferred, the page
+       renders immediately and the chart fills in once Plotly is ready. -->
+  <script src="https://cdn.plot.ly/plotly-3.0.0.min.js" charset="utf-8" defer></script>
   <style>
     html, body { margin: 0; padding: 0; background: #111; color: #e0e0e0;
                  font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
@@ -124,6 +127,8 @@
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
   <script id="boots-data" type="application/json">{{ boots_json|safe }}</script>
   <script>
+   // Runs on window.load so the deferred Plotly library is guaranteed present.
+   window.addEventListener("load", function () {
     // Mirrors visualize_counts.build_figure: two stacked subplots (occupancy on
     // top, cumulative in/out below), boot dividers, integer count axes, dark theme.
     const series = JSON.parse(document.getElementById("series-data").textContent || "[]");
@@ -189,6 +194,7 @@
       document.getElementById("chart").innerHTML =
         '<p class="muted" style="padding:40px;text-align:center">No data yet.</p>';
     }
+   });
   </script>
 </body>
 </html>

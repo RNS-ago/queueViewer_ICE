@@ -236,15 +236,17 @@ def _zone_series(device_ids, limit=2000):
     single-device chart, then walk the merged set of all timestamps and, at each
     one, sum every device's *most recent* value at-or-before that instant
     (carry-forward; a device contributes 0 before its first reading). The result
-    is a continuous combined line — no per-zone boot dividers, since members
-    boot independently.
+    is a continuous combined line.
 
-    Note: `in`/`out` are cumulative-per-boot on each device, so their combined
-    line steps down when a member reboots. `occupancy` is the headline metric
-    and combines cleanly.
+    Members boot independently, so we emit one boot divider per member reboot
+    (labelled with the device that rebooted) rather than a single shared one.
+    They matter here because `in`/`out` are cumulative-per-boot on each device,
+    so the combined line steps down when a member reboots; the marker explains
+    the drop. `occupancy` is the headline metric and combines cleanly.
     """
     per_device = []           # list of [(time, in, out, occ), ...] sorted by time
     timeline = set()
+    boots = []                # (time, device_id) for every member boot
     for did in device_ids:
         recs = list(
             CountRecord.objects.filter(device_id=did, event__in=["snapshot", "boot"])
@@ -255,6 +257,7 @@ def _zone_series(device_ids, limit=2000):
         pts = [(times[r.pk], r.count_in, r.count_out, r.occupancy) for r in recs]
         per_device.append(pts)
         timeline.update(t for t, _, _, _ in pts)
+        boots.extend((times[r.pk], did) for r in recs if r.event == "boot")
 
     series = []
     idx = [0] * len(per_device)
@@ -273,8 +276,10 @@ def _zone_series(device_ids, limit=2000):
         series.append({"x": t.isoformat(), "event": "snapshot",
                        "in": s_in, "out": s_out, "occupancy": s_occ})
 
+    boot_markers = [{"x": t.isoformat(), "label": f"⏻ {did}"}
+                    for t, did in sorted(boots)]
     cmax = max((max(r["in"], r["out"], r["occupancy"]) for r in series), default=0)
-    return series, cmax
+    return series, boot_markers, cmax
 
 
 def _zone_latest(device_ids):
@@ -311,8 +316,7 @@ def _dashboard_context(request):
     zone = next((z for z in zones if z.slug == ident), None) if kind == "zone" else None
 
     if zone is not None:
-        series, cmax = _zone_series(zone.device_ids)
-        boots = []
+        series, boots, cmax = _zone_series(zone.device_ids)
         latest = _zone_latest(zone.device_ids)
         title = zone.name
     else:

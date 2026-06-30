@@ -117,10 +117,14 @@
       if (secs < 86400) return Math.round(secs / 3600) + "h ago";
       return Math.round(secs / 86400) + "d ago";
     }
-    document.querySelectorAll(".seen[data-last-seen]").forEach(td => {
-      const iso = td.getAttribute("data-last-seen");
-      if (iso) td.textContent = relativeTime(iso);
-    });
+    // Re-render every "x ago" label from its stored ISO timestamp. Driven by a
+    // 1s ticker so the counter ticks live between the 30s data polls.
+    function tickSeen() {
+      document.querySelectorAll(".seen[data-last-seen]").forEach(td => {
+        const iso = td.getAttribute("data-last-seen");
+        td.textContent = iso ? relativeTime(iso) : "never";
+      });
+    }
 
     // Rebuild the sensor-status table from polled JSON. Nodes are built with
     // textContent (not innerHTML) so a device id can never inject markup.
@@ -141,6 +145,7 @@
 
         const tdSeen = document.createElement("td");
         tdSeen.className = "seen";
+        tdSeen.setAttribute("data-last-seen", s.last_seen || "");
         tdSeen.textContent = s.last_seen ? relativeTime(s.last_seen) : "never";
 
         tr.append(tdId, tdStatus, tdSeen);
@@ -269,6 +274,8 @@
        {{ cmax }},
        "{{ title|default:'(nothing selected)'|escapejs }}"
      );
+     tickSeen();
+     setInterval(tickSeen, 1000);
      setInterval(refresh, 30000);
    });
   </script>

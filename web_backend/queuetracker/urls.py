@@ -20,6 +20,7 @@ urlpatterns = [
     path("", views.public_dashboard, name="public_dashboard"),
     path("advanced/", views.advanced_dashboard, name="advanced_dashboard"),
     path("advanced/keys/", views.manage_keys, name="manage_keys"),
+    path("advanced/zones/", views.manage_zones, name="manage_zones"),
     # --- auth + admin ---
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),

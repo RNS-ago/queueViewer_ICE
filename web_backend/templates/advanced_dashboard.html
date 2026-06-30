@@ -221,6 +221,20 @@
       shapes, annotations,
     };
 
+    // Preserve the user's zoom/pan across refreshes. A fresh layout defaults to
+    // autorange, so without this Plotly.react would snap back to the full view.
+    // If the user has zoomed an axis (autorange turned off), carry its current
+    // range into the new layout.
+    const prev = chart._fullLayout;
+    if (prev) {
+      ["xaxis", "yaxis", "xaxis2", "yaxis2"].forEach(ax => {
+        if (prev[ax] && prev[ax].autorange === false && layout[ax]) {
+          layout[ax].range = prev[ax].range.slice();
+          layout[ax].autorange = false;
+        }
+      });
+    }
+
     Plotly.react("chart", traces, layout, { responsive: true });
    }
 

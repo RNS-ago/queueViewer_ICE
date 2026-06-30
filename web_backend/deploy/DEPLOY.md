@@ -15,9 +15,21 @@ Caddy can't get a certificate until DNS resolves to the box.
 
 ## 2. System packages
 
+Caddy isn't in the default Ubuntu repositories, so add its official
+repo before installing it.
+
 ```bash
+# Base packages
 sudo apt update
-sudo apt install -y python3 python3-venv git caddy
+sudo apt install -y python3 python3-venv git debian-keyring debian-archive-keyring apt-transport-https curl
+
+# Add Caddy's official repository
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+
+# Install Caddy
+sudo apt update
+sudo apt install -y caddy
 ```
 
 ## 3. Get the code and install deps

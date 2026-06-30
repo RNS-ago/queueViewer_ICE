@@ -1,6 +1,6 @@
 from django.contrib import admin, messages
 
-from .models import ApiKey, CountRecord
+from .models import ApiKey, CountRecord, SensorZone, Zone
 
 
 @admin.register(CountRecord)
@@ -9,6 +9,25 @@ class CountRecordAdmin(admin.ModelAdmin):
     list_filter = ("device_id", "event", "boot_id")
     search_fields = ("device_id", "boot_id", "ts")
     date_hierarchy = "received_at"
+
+
+class SensorZoneInline(admin.TabularInline):
+    model = SensorZone
+    extra = 1
+
+
+@admin.register(Zone)
+class ZoneAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "created_at")
+    prepopulated_fields = {"slug": ("name",)}
+    inlines = [SensorZoneInline]
+
+
+@admin.register(SensorZone)
+class SensorZoneAdmin(admin.ModelAdmin):
+    list_display = ("device_id", "zone")
+    list_filter = ("zone",)
+    search_fields = ("device_id",)
 
 
 @admin.register(ApiKey)

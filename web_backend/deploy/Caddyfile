@@ -13,7 +13,7 @@
 # Replace counter.example.com with your real domain (its DNS A/AAAA record must
 # point at this server first, or the TLS challenge will fail).
 
-counter.example.com {
+queueview.ago.sh {
     encode gzip zstd
     reverse_proxy 127.0.0.1:8000
 }

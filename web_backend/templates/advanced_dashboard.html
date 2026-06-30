@@ -35,10 +35,19 @@
       <h1>Queue counter — staff dashboard</h1>
       <div>
         <form method="get" style="display:inline">
-          <select name="device" onchange="this.form.submit()">
-            {% for d in devices %}
-              <option value="{{ d }}" {% if d == device %}selected{% endif %}>{{ d }}</option>
-            {% endfor %}
+          <select name="target" onchange="this.form.submit()">
+            {% if zones %}
+            <optgroup label="Zones">
+              {% for z in zones %}
+                <option value="zone:{{ z.slug }}" {% if target == "zone:"|add:z.slug %}selected{% endif %}>{{ z.name }} ({{ z.sensors.count }})</option>
+              {% endfor %}
+            </optgroup>
+            {% endif %}
+            <optgroup label="Sensors">
+              {% for d in devices %}
+                <option value="device:{{ d }}" {% if target == "device:"|add:d %}selected{% endif %}>{{ d }}</option>
+              {% endfor %}
+            </optgroup>
           </select>
         </form>
         <span class="muted">· {{ user.username }} ·</span>
@@ -49,7 +58,8 @@
     </header>
 
     <nav class="tabs">
-      <a class="active" href="{% url 'advanced_dashboard' %}{% if device %}?device={{ device }}{% endif %}">Dashboard</a>
+      <a class="active" href="{% url 'advanced_dashboard' %}{% if target %}?target={{ target }}{% endif %}">Dashboard</a>
+      {% if user.is_staff %}<a href="{% url 'manage_zones' %}">Zones</a>{% endif %}
       {% if user.is_staff %}<a href="{% url 'manage_keys' %}">API keys</a>{% endif %}
     </nav>
 
@@ -61,7 +71,7 @@
     </div>
 
     <div id="chart"></div>
-    <p class="muted">Showing latest records for <b>{{ device|default:"(no device)" }}</b>. Auto-refreshes every 30s.</p>
+    <p class="muted">Showing latest records for <b>{{ title|default:"(nothing selected)" }}</b>. Auto-refreshes every 30s.</p>
   </div>
 
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
@@ -109,7 +119,7 @@
     });
 
     const layout = {
-      title: { text: "Queue counter — {{ device|default:'all devices' }}" },
+      title: { text: "Queue counter — {{ title|default:'(nothing selected)'|escapejs }}" },
       height: 720, hovermode: "x unified", margin: { t: 90 },
       paper_bgcolor: "#111", plot_bgcolor: "#111", font: { color: "#e0e0e0" },
       legend: { orientation: "h", yanchor: "bottom", y: 1.02, xanchor: "right", x: 1 },

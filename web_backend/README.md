@@ -75,3 +75,65 @@ records first (API keys and users are kept):
 Everything is environment-driven with safe dev defaults — see `.env.example`.
 For production set `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=false`, and
 `DJANGO_ALLOWED_HOSTS`.
+
+## Deployment (production)
+
+The production stack is **gunicorn** (running the Django app on
+`127.0.0.1:8000`) behind **Caddy** (reverse proxy + automatic HTTPS), with
+**WhiteNoise** serving the admin's static files and data in SQLite. Ready-made
+files live in `deploy/`:
+
+| File                       | Purpose                                            |
+|----------------------------|----------------------------------------------------|
+| `deploy/queuetracker.service` | systemd unit that runs gunicorn                 |
+| `deploy/Caddyfile`         | Caddy reverse-proxy + HTTPS config (edit the domain) |
+| `deploy/DEPLOY.md`         | full step-by-step VPS walkthrough                  |
+
+Outline (Ubuntu/Debian, repo at `/opt/queueTracker_roskilde`):
+
+```bash
+# 1. DNS: point your domain's A/AAAA record at the server
+# 2. Python 3.12 (Django 5 needs 3.10+; Ubuntu 20.04 ships 3.8)
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.12 python3.12-venv
+
+# 3. Packages (Caddy isn't in the default Ubuntu repos — add its official repo first)
+sudo apt install -y git debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install -y caddy
+
+# 4. Code + deps (build the venv with python3.12)
+sudo git clone <your-repo-url> /opt/queueTracker_roskilde
+cd /opt/queueTracker_roskilde
+sudo python3.12 -m venv .venv
+sudo .venv/bin/pip install -r web_backend/requirements.txt
+
+# 4. Production .env (copy web_backend/.env.example, set DEBUG=false,
+#    a real DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS)
+.venv/bin/python -c "import secrets; print(secrets.token_urlsafe(64))"  # secret key
+
+# 5. Initialise DB (starts empty — db.sqlite3 is gitignored)
+cd web_backend
+sudo ../.venv/bin/python manage.py migrate
+sudo ../.venv/bin/python manage.py collectstatic --noinput
+sudo ../.venv/bin/python manage.py createsuperuser
+sudo ../.venv/bin/python manage.py create_apikey entrance-01   # copy the printed key
+sudo chown -R www-data:www-data /opt/queueTracker_roskilde/web_backend
+
+# 6. gunicorn under systemd
+sudo cp deploy/queuetracker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now queuetracker
+
+# 7. Caddy in front (edit the domain first)
+sudo cp deploy/Caddyfile /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Then point the device at `https://<your-domain>/api/log` with the API key from
+step 5. **See `deploy/DEPLOY.md` for the full guide**, including a note on
+ESP32 + HTTPS, updating an existing deployment, and SQLite backups.

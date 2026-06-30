@@ -3,6 +3,7 @@ import secrets
 
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 # Raw keys look like "qt_<43 url-safe chars>". The "qt_" prefix makes them
 # easy to spot in logs/config; the first 8 chars are stored in the clear so a
@@ -109,3 +110,57 @@ class CountRecord(models.Model):
 
     def __str__(self):
         return f"{self.device_id} {self.event} @ {self.ts} (occ={self.occupancy})"
+
+
+class Zone(models.Model):
+    """A named group of sensors whose occupancy is combined.
+
+    Sensors (device_ids) are assigned to a zone via SensorZone. A zone's live
+    occupancy is the sum of its members' latest occupancy; its chart sums the
+    members' occupancy over time (see counts.views). `slug` is the stable id
+    used in dashboard URLs.
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=120, unique=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        # Derive a unique slug from the name on first save, keeping it stable
+        # afterwards so existing dashboard links don't break on rename.
+        if not self.slug:
+            base = slugify(self.name) or "zone"
+            slug = base
+            n = 2
+            while Zone.objects.exclude(pk=self.pk).filter(slug=slug).exists():
+                slug = f"{base}-{n}"
+                n += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    @property
+    def device_ids(self):
+        return list(self.sensors.values_list("device_id", flat=True))
+
+
+class SensorZone(models.Model):
+    """Assignment of one sensor (device_id) to a Zone.
+
+    device_id is unique, enforcing the "one zone per sensor" rule. A device_id
+    with no SensorZone row is simply unassigned.
+    """
+
+    device_id = models.CharField(max_length=64, unique=True, db_index=True)
+    zone = models.ForeignKey(Zone, related_name="sensors", on_delete=models.CASCADE)
+
+    class Meta:
+        ordering = ["device_id"]
+
+    def __str__(self):
+        return f"{self.device_id} → {self.zone.name}"

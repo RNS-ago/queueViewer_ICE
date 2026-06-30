@@ -13,6 +13,9 @@
     .label { text-transform: uppercase; letter-spacing: .1em; color: #888; font-size: .8rem; }
     .meta { margin-top: 24px; color: #777; font-size: .85rem; }
     a { color: #4FC3F7; }
+    .picker { margin-bottom: 28px; }
+    select { background: #1c1c1c; color: #e0e0e0; border: 1px solid #333;
+             border-radius: 6px; padding: 8px 12px; font-size: 1rem; }
   </style>
 </head>
 <body>
@@ -20,12 +23,35 @@
     MINIMAL PUBLIC DASHBOARD — placeholder.
     Replace this file with the minimal page you want to provide.
     The view passes these template variables you can use:
-      {{ device }}        current device id
+      {{ title }}         current zone name or device id
       {{ latest }}        latest record dict (.occupancy, .in, .out, .ts)
       {{ series_json }}   JSON array of recent records (safe to embed in JS)
   -->
   <div class="wrap">
-    <div class="label">People inside{% if device %} · {{ device }}{% endif %}</div>
+    {% if zones or devices %}
+    <div class="picker">
+      <form method="get">
+        <select name="target" onchange="this.form.submit()" aria-label="Choose a zone or sensor">
+          {% if zones %}
+          <optgroup label="Zones">
+            {% for z in zones %}
+              <option value="zone:{{ z.slug }}" {% if target == "zone:"|add:z.slug %}selected{% endif %}>{{ z.name }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+          {% if devices %}
+          <optgroup label="Sensors">
+            {% for d in devices %}
+              <option value="device:{{ d }}" {% if target == "device:"|add:d %}selected{% endif %}>{{ d }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+        <noscript><button type="submit">Show</button></noscript>
+      </form>
+    </div>
+    {% endif %}
+    <div class="label">People inside{% if title %} · {{ title }}{% endif %}</div>
     {% if latest %}
       <div class="big">{{ latest.occupancy }}</div>
       <div class="meta">in {{ latest.in }} · out {{ latest.out }}<br>as of {{ latest.ts }}</div>

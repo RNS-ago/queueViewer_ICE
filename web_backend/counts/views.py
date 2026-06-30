@@ -18,7 +18,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from .models import ApiKey, CountRecord
+from .models import ApiKey, CountRecord, SensorZone, Zone
 
 # Managing keys is an admin-level action; restrict it to staff users.
 staff_required = user_passes_test(lambda u: u.is_staff)
@@ -196,17 +196,112 @@ def _latest(device_id):
     return {"occupancy": r.occupancy, "in": r.count_in, "out": r.count_out, "ts": r.ts}
 
 
+def _zone_series(device_ids, limit=2000):
+    """Combine several sensors' occupancy/in/out into one time series.
+
+    Each member device has its own snapshot/boot records (and its own boot
+    timeline). We resolve every device's x-axis times with the same logic as a
+    single-device chart, then walk the merged set of all timestamps and, at each
+    one, sum every device's *most recent* value at-or-before that instant
+    (carry-forward; a device contributes 0 before its first reading). The result
+    is a continuous combined line — no per-zone boot dividers, since members
+    boot independently.
+
+    Note: `in`/`out` are cumulative-per-boot on each device, so their combined
+    line steps down when a member reboots. `occupancy` is the headline metric
+    and combines cleanly.
+    """
+    per_device = []           # list of [(time, in, out, occ), ...] sorted by time
+    timeline = set()
+    for did in device_ids:
+        recs = list(
+            CountRecord.objects.filter(device_id=did, event__in=["snapshot", "boot"])
+            .order_by("-received_at")[:limit]
+        )
+        times = _resolve_times(recs)
+        recs.sort(key=lambda r: (times[r.pk], r.pk))
+        pts = [(times[r.pk], r.count_in, r.count_out, r.occupancy) for r in recs]
+        per_device.append(pts)
+        timeline.update(t for t, _, _, _ in pts)
+
+    series = []
+    idx = [0] * len(per_device)
+    last = [(0, 0, 0)] * len(per_device)   # (in, out, occ) carried forward per device
+    for t in sorted(timeline):
+        s_in = s_out = s_occ = 0
+        for i, pts in enumerate(per_device):
+            j = idx[i]
+            while j < len(pts) and pts[j][0] <= t:
+                last[i] = (pts[j][1], pts[j][2], pts[j][3])
+                j += 1
+            idx[i] = j
+            s_in += last[i][0]
+            s_out += last[i][1]
+            s_occ += last[i][2]
+        series.append({"x": t.isoformat(), "event": "snapshot",
+                       "in": s_in, "out": s_out, "occupancy": s_occ})
+
+    cmax = max((max(r["in"], r["out"], r["occupancy"]) for r in series), default=0)
+    return series, cmax
+
+
+def _zone_latest(device_ids):
+    """Latest combined occupancy/in/out for a zone: sum of each member's latest."""
+    occ = cin = cout = 0
+    latest_ts = None
+    for did in device_ids:
+        r = _latest(did)
+        if r is None:
+            continue
+        occ += r["occupancy"]
+        cin += r["in"]
+        cout += r["out"]
+        latest_ts = r["ts"]  # representative; members aren't perfectly synced
+    if latest_ts is None:
+        return None
+    return {"occupancy": occ, "in": cin, "out": cout, "ts": latest_ts}
+
+
 def _dashboard_context(request):
     devices = _devices()
-    device = request.GET.get("device") or (devices[0] if devices else None)
-    series, boots, cmax = _chart_data(device) if device else ([], [], 0)
+    zones = list(Zone.objects.prefetch_related("sensors"))
+
+    # A single selector mixes zones and sensors; its value is "zone:<slug>" or
+    # "device:<id>". Default to the first zone, else the first sensor.
+    target = request.GET.get("target")
+    if not target:
+        if zones:
+            target = f"zone:{zones[0].slug}"
+        elif devices:
+            target = f"device:{devices[0]}"
+
+    kind, _, ident = (target or "").partition(":")
+    zone = next((z for z in zones if z.slug == ident), None) if kind == "zone" else None
+
+    if zone is not None:
+        series, cmax = _zone_series(zone.device_ids)
+        boots = []
+        latest = _zone_latest(zone.device_ids)
+        title = zone.name
+    else:
+        # Treat anything not resolving to a zone as a device selection.
+        device = ident if kind == "device" else None
+        if device not in devices:
+            device = devices[0] if devices else None
+        series, boots, cmax = _chart_data(device) if device else ([], [], 0)
+        latest = _latest(device) if device else None
+        title = device
+        target = f"device:{device}" if device else target
+
     return {
         "devices": devices,
-        "device": device,
+        "zones": zones,
+        "target": target,
+        "title": title,
         "series_json": json.dumps(series),
         "boots_json": json.dumps(boots),
         "cmax": cmax,
-        "latest": _latest(device) if device else None,
+        "latest": latest,
         "total_records": CountRecord.objects.count(),
     }
 
@@ -221,6 +316,58 @@ def public_dashboard(request):
 def advanced_dashboard(request):
     """Richer dashboard, gated behind login."""
     return render(request, "advanced_dashboard.html", _dashboard_context(request))
+
+
+@login_required
+@staff_required
+@require_http_methods(["GET", "POST"])
+def manage_zones(request):
+    """Staff-only tab: create/delete zones and assign sensors to them.
+
+    Sensors are the distinct device_ids seen in CountRecord. Each sensor belongs
+    to at most one zone (SensorZone.device_id is unique), so assigning a sensor
+    already in another zone moves it.
+    """
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "create":
+            name = (request.POST.get("name") or "").strip()
+            if not name:
+                messages.error(request, "Please enter a name for the zone.")
+            elif Zone.objects.filter(name=name).exists():
+                messages.error(request, f"A zone named “{name}” already exists.")
+            else:
+                Zone.objects.create(name=name)
+                messages.success(request, f"Created zone “{name}”.")
+        elif action == "delete":
+            zone = Zone.objects.filter(pk=request.POST.get("pk")).first()
+            if zone is None:
+                messages.error(request, "That zone no longer exists.")
+            else:
+                name = zone.name
+                zone.delete()  # cascades to its SensorZone rows
+                messages.success(request, f"Deleted zone “{name}”.")
+        elif action == "assign":
+            zone = Zone.objects.filter(pk=request.POST.get("zone")).first()
+            device_id = (request.POST.get("device_id") or "").strip()
+            if zone is None or not device_id:
+                messages.error(request, "Pick a sensor and a zone.")
+            else:
+                SensorZone.objects.update_or_create(
+                    device_id=device_id, defaults={"zone": zone}
+                )
+                messages.success(request, f"Assigned “{device_id}” to “{zone.name}”.")
+        elif action == "unassign":
+            SensorZone.objects.filter(device_id=request.POST.get("device_id")).delete()
+            messages.success(request, "Removed the sensor from its zone.")
+        return redirect("manage_zones")  # PRG: avoid resubmit on refresh
+
+    devices = _devices()
+    assigned = {sz.device_id: sz.zone_id for sz in SensorZone.objects.all()}
+    return render(request, "manage_zones.html", {
+        "zones": list(Zone.objects.prefetch_related("sensors")),
+        "unassigned": [d for d in devices if d not in assigned],
+    })
 
 
 @login_required

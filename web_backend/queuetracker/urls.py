@@ -19,6 +19,7 @@ urlpatterns = [
     path("api/log", views.api_log, name="api_log"),
     path("", views.public_dashboard, name="public_dashboard"),
     path("advanced/", views.advanced_dashboard, name="advanced_dashboard"),
+    path("advanced/data/", views.advanced_dashboard_data, name="advanced_dashboard_data"),
     path("advanced/keys/", views.manage_keys, name="manage_keys"),
     path("advanced/zones/", views.manage_zones, name="manage_zones"),
     # --- auth + admin ---

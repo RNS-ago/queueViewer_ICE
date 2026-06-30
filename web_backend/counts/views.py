@@ -363,6 +363,25 @@ def advanced_dashboard(request):
 
 
 @login_required
+def advanced_dashboard_data(request):
+    """JSON feed powering the dashboard's in-place refresh.
+
+    The page polls this instead of reloading itself, so the ~4.5 MB Plotly
+    bundle is parsed once and kept in memory rather than re-executed every 30s.
+    """
+    ctx = _dashboard_context(request)
+    return JsonResponse({
+        "series": json.loads(ctx["series_json"]),
+        "boots": json.loads(ctx["boots_json"]),
+        "cmax": ctx["cmax"],
+        "latest": ctx["latest"],
+        "total_records": ctx["total_records"],
+        "sensor_statuses": ctx["sensor_statuses"],
+        "title": ctx["title"],
+    })
+
+
+@login_required
 @staff_required
 @require_http_methods(["GET", "POST"])
 def manage_zones(request):

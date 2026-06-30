@@ -3,7 +3,6 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="30">
   <title>Queue counter — staff dashboard</title>
   <!-- defer: Plotly is ~4.5 MB; loading it render-blocking in <head> stalls the
        whole page on a slow uplink (the body never paints). Deferred, the page
@@ -80,10 +79,10 @@
     </nav>
 
     <div class="cards">
-      <div class="card occ"><div class="v">{% if latest %}{{ latest.occupancy }}{% else %}—{% endif %}</div><div class="l">Occupancy</div></div>
-      <div class="card in"><div class="v">{% if latest %}{{ latest.in }}{% else %}—{% endif %}</div><div class="l">Total in</div></div>
-      <div class="card out"><div class="v">{% if latest %}{{ latest.out }}{% else %}—{% endif %}</div><div class="l">Total out</div></div>
-      <div class="card"><div class="v">{{ total_records }}</div><div class="l">Records stored</div></div>
+      <div class="card occ"><div class="v" id="card-occupancy">{% if latest %}{{ latest.occupancy }}{% else %}—{% endif %}</div><div class="l">Occupancy</div></div>
+      <div class="card in"><div class="v" id="card-in">{% if latest %}{{ latest.in }}{% else %}—{% endif %}</div><div class="l">Total in</div></div>
+      <div class="card out"><div class="v" id="card-out">{% if latest %}{{ latest.out }}{% else %}—{% endif %}</div><div class="l">Total out</div></div>
+      <div class="card"><div class="v" id="card-total">{{ total_records }}</div><div class="l">Records stored</div></div>
     </div>
 
     <div id="chart"></div>
@@ -94,7 +93,7 @@
       <h2>Sensor status</h2>
       <table>
         <thead><tr><th>Sensor</th><th>Status</th><th>Last seen</th></tr></thead>
-        <tbody>
+        <tbody id="status-body">
           {% for s in sensor_statuses %}
           <tr>
             <td>{{ s.device_id }}</td>
@@ -122,22 +121,56 @@
       const iso = td.getAttribute("data-last-seen");
       if (iso) td.textContent = relativeTime(iso);
     });
+
+    // Rebuild the sensor-status table from polled JSON. Nodes are built with
+    // textContent (not innerHTML) so a device id can never inject markup.
+    function updateStatuses(statuses) {
+      const tbody = document.getElementById("status-body");
+      if (!tbody) return;
+      tbody.innerHTML = "";
+      (statuses || []).forEach(s => {
+        const tr = document.createElement("tr");
+
+        const tdId = document.createElement("td");
+        tdId.textContent = s.device_id;
+
+        const tdStatus = document.createElement("td");
+        const dot = document.createElement("span");
+        dot.className = "dot " + (s.online ? "on" : "off");
+        tdStatus.append(dot, s.online ? "Online" : "Offline");
+
+        const tdSeen = document.createElement("td");
+        tdSeen.className = "seen";
+        tdSeen.textContent = s.last_seen ? relativeTime(s.last_seen) : "never";
+
+        tr.append(tdId, tdStatus, tdSeen);
+        tbody.appendChild(tr);
+      });
+    }
   </script>
 
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
   <script id="boots-data" type="application/json">{{ boots_json|safe }}</script>
   <script>
-   // Runs on window.load so the deferred Plotly library is guaranteed present.
-   window.addEventListener("load", function () {
-    // Mirrors visualize_counts.build_figure: two stacked subplots (occupancy on
-    // top, cumulative in/out below), boot dividers, integer count axes, dark theme.
-    const series = JSON.parse(document.getElementById("series-data").textContent || "[]");
-    const boots = JSON.parse(document.getElementById("boots-data").textContent || "[]");
-    const cmax = {{ cmax }};
+   // Endpoint returning the dashboard's numbers as JSON. We poll this instead of
+   // reloading the page, so the ~4.5 MB Plotly bundle is parsed once (on first
+   // load) and reused — refreshes become near-instant.
+   const DATA_URL = "{% url 'advanced_dashboard_data' %}";
+   const GRID = "#283442", LINE = "#506784";
+
+   // Build or refresh the chart in place. Mirrors visualize_counts.build_figure:
+   // two stacked subplots (occupancy on top, cumulative in/out below), boot
+   // dividers, integer count axes, dark theme. Plotly.react reuses the existing
+   // figure and DOM, so it's cheap and preserves the user's zoom/pan.
+   function drawChart(series, boots, cmax, title) {
+    const chart = document.getElementById("chart");
+    if (!series.length) {
+      Plotly.purge(chart);
+      chart.innerHTML = '<p class="muted" style="padding:40px;text-align:center">No data yet.</p>';
+      return;
+    }
     const x = series.map(r => r.x);
     const dtick = cmax <= 12 ? 1 : undefined;   // whole people only when the range is small
-
-    const GRID = "#283442", LINE = "#506784";
 
     const traces = [
       { x, y: series.map(r => r.occupancy), name: "occupancy", mode: "lines+markers",
@@ -171,7 +204,7 @@
     });
 
     const layout = {
-      title: { text: "Queue counter — {{ title|default:'(nothing selected)'|escapejs }}" },
+      title: { text: "Queue counter — " + title },
       height: 720, hovermode: "x unified", margin: { t: 90 },
       paper_bgcolor: "#111", plot_bgcolor: "#111", font: { color: "#e0e0e0" },
       legend: { orientation: "h", yanchor: "bottom", y: 1.02, xanchor: "right", x: 1 },
@@ -188,12 +221,41 @@
       shapes, annotations,
     };
 
-    if (series.length) {
-      Plotly.newPlot("chart", traces, layout, { responsive: true });
-    } else {
-      document.getElementById("chart").innerHTML =
-        '<p class="muted" style="padding:40px;text-align:center">No data yet.</p>';
-    }
+    Plotly.react("chart", traces, layout, { responsive: true });
+   }
+
+   // The selector value identifies the current zone/sensor; the poll forwards it
+   // so the JSON feed matches what's shown on screen.
+   function currentTarget() {
+     const sel = document.querySelector("select[name=target]");
+     return sel ? sel.value : "";
+   }
+
+   // Pull fresh data and update the cards, status table and chart in place.
+   async function refresh() {
+     try {
+       const resp = await fetch(DATA_URL + "?target=" + encodeURIComponent(currentTarget()),
+                                { headers: { "X-Requested-With": "fetch" } });
+       if (!resp.ok) return;                    // keep the last good view on error
+       const d = await resp.json();
+       document.getElementById("card-occupancy").textContent = d.latest ? d.latest.occupancy : "—";
+       document.getElementById("card-in").textContent        = d.latest ? d.latest.in        : "—";
+       document.getElementById("card-out").textContent       = d.latest ? d.latest.out       : "—";
+       document.getElementById("card-total").textContent     = d.total_records;
+       updateStatuses(d.sensor_statuses);
+       drawChart(d.series, d.boots, d.cmax, d.title);
+     } catch (e) { /* transient network error: leave the page untouched */ }
+   }
+
+   // First paint from the server-embedded data (no extra round-trip), then poll.
+   window.addEventListener("load", function () {
+     drawChart(
+       JSON.parse(document.getElementById("series-data").textContent || "[]"),
+       JSON.parse(document.getElementById("boots-data").textContent || "[]"),
+       {{ cmax }},
+       "{{ title|default:'(nothing selected)'|escapejs }}"
+     );
+     setInterval(refresh, 30000);
    });
   </script>
 </body>

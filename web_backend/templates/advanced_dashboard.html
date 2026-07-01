@@ -181,7 +181,11 @@
     .statusbar .ledpulse { width: 10px; height: 10px; border-radius: 50%;
                            background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%);
                            box-shadow: 0 0 8px var(--green); animation: blink 1.6s steps(2) infinite; }
+    .statusbar .conn.offline { color: #e88; }
+    .statusbar .conn.offline .ledpulse { background: radial-gradient(circle at 35% 30%, #ffd6d6, var(--red) 70%);
+                                         box-shadow: 0 0 8px var(--red); animation: none; }
     .statusbar .note { font-size: 1.15rem; color: var(--green); letter-spacing: .04em; text-shadow: 0 0 6px rgba(93,255,123,.5); }
+    .statusbar .note.offline { color: var(--red); text-shadow: 0 0 6px rgba(255,42,42,.5); }
     .statusbar .target { margin-left: auto; font-size: 1rem; color: #5f6770; letter-spacing: .03em; }
 
     /* Custom CRT dropdown — native <select> option lists can't be themed by CSS,
@@ -298,9 +302,9 @@
       </div>
       {% endif %}
 
-      <div class="statusbar">
-        <span class="conn"><span class="ledpulse"></span>CONNECTION</span>
-        <span class="note">live feed · polling every 60s</span>
+      <div class="statusbar" data-last-seen="{{ latest.last_seen|default:'' }}">
+        <span class="conn" id="conn"><span class="ledpulse"></span><span id="conn-status">ONLINE</span></span>
+        <span class="note" id="conn-note">updated just now · polling every 60s</span>
         <span class="target">sector {{ title|default:"--" }}</span>
       </div>
     </div>
@@ -323,6 +327,27 @@
         const iso = td.getAttribute("data-last-seen");
         td.textContent = iso ? relativeTime(iso) : "never";
       });
+      updateConn();
+    }
+
+    // The selected target's freshness for the bottom status strip: how long ago
+    // its last data arrived (server receipt time) and whether that's recent
+    // enough to count as online. Kept current across polls via `lastSeenIso`.
+    const ONLINE_AFTER_SECS = 180;   // matches the backend's _ONLINE_AFTER
+    let lastSeenIso = null;
+    function updateConn() {
+      const ms = lastSeenIso ? new Date(lastSeenIso).getTime() : NaN;
+      const online = Number.isFinite(ms) && (Date.now() - ms) / 1000 <= ONLINE_AFTER_SECS;
+      const conn = document.getElementById("conn");
+      const statusEl = document.getElementById("conn-status");
+      const noteEl = document.getElementById("conn-note");
+      if (conn) conn.classList.toggle("offline", !online);
+      if (statusEl) statusEl.textContent = online ? "ONLINE" : "OFFLINE";
+      if (noteEl) {
+        noteEl.classList.toggle("offline", !online);
+        noteEl.textContent = (Number.isFinite(ms) ? "updated " + relativeTime(lastSeenIso) : "no data")
+                             + " · polling every 60s";
+      }
     }
 
     // Rebuild the sensor-status table from polled JSON. Nodes are built with
@@ -484,6 +509,8 @@
        document.getElementById("card-in").textContent        = d.latest ? d.latest.in        : "--";
        document.getElementById("card-out").textContent       = d.latest ? d.latest.out       : "--";
        document.getElementById("card-total").textContent     = d.total_records;
+       lastSeenIso = d.latest ? d.latest.last_seen : null;
+       updateConn();
        updateStatuses(d.sensor_statuses);
        drawChart(d.series, d.boots, d.cmax, d.title);
      } catch (e) { /* transient network error: leave the page untouched */ }
@@ -497,6 +524,8 @@
        {{ cmax }},
        "{{ title|default:'(nothing selected)'|escapejs }}"
      );
+     const sb = document.querySelector(".statusbar");
+     lastSeenIso = sb && sb.getAttribute("data-last-seen") || null;
      tickSeen();
      setInterval(tickSeen, 1000);
      setInterval(refresh, 60000);

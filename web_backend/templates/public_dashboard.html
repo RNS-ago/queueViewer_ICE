@@ -72,6 +72,9 @@
       box-shadow: inset 0 0 10px rgba(255,0,0,.5); text-shadow: 0 0 8px rgba(255,0,0,.9);
       animation: blink 1.1s steps(2) infinite;
     }
+    /* When the feed is stale the badge stops claiming "live": muted, no blink. */
+    .urgent.stale { color: var(--metal-d); background: #0c0d10; border-color: #23262b;
+                    box-shadow: none; text-shadow: none; animation: none; }
     @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
     .leds { display: flex; flex-wrap: wrap; gap: 6px; max-width: 240px; }
     .leds .led { width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 1px solid #1a1d22;
@@ -171,8 +174,12 @@
     .statusbar .dot { width: 10px; height: 10px; border-radius: 50%;
                       background: radial-gradient(circle at 35% 30%, #d6ffdf, var(--green) 70%);
                       box-shadow: 0 0 8px var(--green); animation: blink 1.6s steps(2) infinite; }
+    .statusbar .conn.offline { color: #e88; }
+    .statusbar .conn.offline .dot { background: radial-gradient(circle at 35% 30%, #ffd6d6, var(--red) 70%);
+                                    box-shadow: 0 0 8px var(--red); animation: none; }
     .statusbar .ago { font-size: 1.25rem; color: var(--green); letter-spacing: .04em;
                       text-shadow: 0 0 6px rgba(93,255,123,.6); }
+    .statusbar .ago.offline { color: var(--red); text-shadow: 0 0 6px rgba(255,42,42,.6); }
     .statusbar .rate { font-size: .95rem; color: var(--green-d); letter-spacing: .04em; }
     .statusbar .stamp { margin-left: auto; font-size: .95rem; color: #5f6770; letter-spacing: .03em; }
 
@@ -226,7 +233,7 @@
           <button type="button" class="led{% if target == "device:"|add:d %} on{% endif %}" data-target="device:{{ d }}" title="{{ d }}" aria-label="{{ d }}" aria-pressed="{% if target == "device:"|add:d %}true{% else %}false{% endif %}"></button>
           {% endfor %}
         </div>
-        <div class="urgent">● Live</div>
+        <div class="urgent" id="live-badge">● Live</div>
       </div>
       <div class="hazard"></div>
 
@@ -282,8 +289,8 @@
       </div>
 
       {% if latest %}
-      <div class="statusbar">
-        <span class="conn"><span class="dot"></span>CONNECTION</span>
+      <div class="statusbar" data-last-seen="{{ latest.last_seen }}">
+        <span class="conn" id="conn"><span class="dot"></span><span id="conn-status">ONLINE</span></span>
         <span class="ago" id="updated-ago">updated just now</span>
         <span class="rate">auto-refresh 60s</span>
         <span class="stamp">ts {{ latest.ts }}</span>
@@ -312,9 +319,16 @@
 
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>
   <script>
-    // The page hard-reloads every 60s (meta refresh). We render at load and let
-    // a 1s ticker advance the "updated x ago" counter until the next reload.
-    const loadedAt = Date.now();
+    // The page hard-reloads every 60s (meta refresh). The "updated x ago" and
+    // online/offline status are measured from the real last-data timestamp
+    // (server receipt time), not page load — so a stale feed reads as stale even
+    // right after a refresh. A 1s ticker advances the age between reloads.
+    const statusbar = document.querySelector(".statusbar");
+    const lastSeenMs = statusbar
+      ? new Date(statusbar.getAttribute("data-last-seen")).getTime()
+      : NaN;
+    // Match the backend's _ONLINE_AFTER: silent past this and the sensor is stale.
+    const ONLINE_AFTER_SECS = 180;
 
     // Series points carry cumulative-per-boot `in`/`out`. To get the flow over the
     // last 10 minutes we sum the positive step between consecutive points whose
@@ -351,13 +365,31 @@
     function relativeAgo(secs) {
       if (secs < 5)    return "updated just now";
       if (secs < 60)   return "updated " + Math.round(secs) + "s ago";
-      return "updated " + Math.round(secs / 60) + "m ago";
+      if (secs < 3600) return "updated " + Math.round(secs / 60) + "m ago";
+      if (secs < 86400) return "updated " + Math.round(secs / 3600) + "h ago";
+      return "updated " + Math.round(secs / 86400) + "d ago";
     }
     function tickAgo() {
-      const el = document.getElementById("updated-ago");
-      if (!el) return;
-      const secs = (Date.now() - loadedAt) / 1000;
-      el.textContent = relativeAgo(secs);
+      // Reflect data freshness: green ONLINE while recent, red OFFLINE once stale
+      // (or when we have no data at all).
+      const online = Number.isFinite(lastSeenMs)
+        && (Date.now() - lastSeenMs) / 1000 <= ONLINE_AFTER_SECS;
+
+      const agoEl = document.getElementById("updated-ago");
+      if (agoEl && Number.isFinite(lastSeenMs)) {
+        const secs = Math.max(0, (Date.now() - lastSeenMs) / 1000);
+        agoEl.textContent = relativeAgo(secs);
+      }
+      const conn = document.getElementById("conn");
+      const statusEl = document.getElementById("conn-status");
+      if (conn) conn.classList.toggle("offline", !online);
+      if (agoEl) agoEl.classList.toggle("offline", !online);
+      if (statusEl) statusEl.textContent = online ? "ONLINE" : "OFFLINE";
+      const badge = document.getElementById("live-badge");
+      if (badge) {
+        badge.classList.toggle("stale", !online);
+        badge.textContent = online ? "● Live" : "● Offline";
+      }
     }
 
     renderFlow();

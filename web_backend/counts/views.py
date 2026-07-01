@@ -232,7 +232,11 @@ def _latest(device_id):
     r = CountRecord.objects.filter(device_id=device_id).order_by("-received_at", "-pk").first()
     if r is None:
         return None
-    return {"occupancy": r.occupancy, "in": r.count_in, "out": r.count_out, "ts": r.ts}
+    # `last_seen` is the server receipt time (the only clock we trust for
+    # liveness — device `ts` may be a pre-NTP uptime marker), so the page can
+    # show how recent the data actually is and whether the sensor is online.
+    return {"occupancy": r.occupancy, "in": r.count_in, "out": r.count_out,
+            "ts": r.ts, "last_seen": r.received_at.isoformat()}
 
 
 def _zone_series(device_ids, limit=2000):
@@ -293,6 +297,7 @@ def _zone_latest(device_ids):
     """Latest combined occupancy/in/out for a zone: sum of each member's latest."""
     occ = cin = cout = 0
     latest_ts = None
+    last_seen = None  # most recent receipt across members — the zone's liveness
     for did in device_ids:
         r = _latest(did)
         if r is None:
@@ -301,9 +306,12 @@ def _zone_latest(device_ids):
         cin += r["in"]
         cout += r["out"]
         latest_ts = r["ts"]  # representative; members aren't perfectly synced
+        if last_seen is None or r["last_seen"] > last_seen:
+            last_seen = r["last_seen"]
     if latest_ts is None:
         return None
-    return {"occupancy": occ, "in": cin, "out": cout, "ts": latest_ts}
+    return {"occupancy": occ, "in": cin, "out": cout, "ts": latest_ts,
+            "last_seen": last_seen}
 
 
 def _dashboard_context(request):

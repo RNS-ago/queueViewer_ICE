@@ -535,6 +535,22 @@
         });
         setTimeout(go, 700);
       });
+
+      // Pressing Back restores this page from the bfcache frozen in its collapsed
+      // state (inline transform still set). Play the collapse in reverse — the
+      // console powers back on from the line — instead of snapping to full.
+      window.addEventListener("pageshow", function () {
+        if (!mainConsole.style.transform) return; // fresh load: nothing to restore
+        mainConsole.style.transition = "transform .55s cubic-bezier(0, .55, .45, 1), filter .55s ease";
+        mainConsole.style.transform = "none";
+        mainConsole.style.filter = "";
+        mainConsole.addEventListener("transitionend", function te(ev) {
+          if (ev.target !== mainConsole || ev.propertyName !== "transform") return;
+          mainConsole.removeEventListener("transitionend", te);
+          mainConsole.style.transition = mainConsole.style.transform =
+            mainConsole.style.transformOrigin = mainConsole.style.filter = "";
+        });
+      });
     })();
   </script>
 

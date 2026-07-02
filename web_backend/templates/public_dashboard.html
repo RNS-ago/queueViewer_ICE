@@ -215,11 +215,180 @@
     }
     .crt-select .opt:hover, .crt-select .opt:focus { background: rgba(93,255,123,.16); color: #d8ffe1; outline: none; }
     .crt-select .opt.on { background: linear-gradient(180deg, #9fffb4, var(--green)); color: var(--screen); text-shadow: none; }
+
+    /* ----- First-visit lander / mission prompt -----
+       Shown once (localStorage), on top of the dashboard, in the same console
+       aesthetic. Dismisses to the live dashboard when the visitor accepts. */
+    .lander {
+      position: fixed; inset: 0; z-index: 100; overflow: auto;
+      display: flex; align-items: center; justify-content: center;
+      padding: clamp(12px, 3vw, 40px);
+      background:
+        radial-gradient(60% 50% at 50% 0%, #15171c, #000 70%),
+        repeating-linear-gradient(0deg, #050608 0 2px, #000 2px 4px) #000;
+    }
+    .lander[hidden] { display: none; }
+    /* The lander CRT fills a tall screen and spreads its content, so the mission
+       occupies the whole phosphor panel rather than a small band of it. */
+    .lander .screen { min-height: min(74vh, 640px); display: flex; align-items: stretch; }
+    /* Mission pinned to the top, the ask + accept button to the bottom. */
+    .lander-crt { width: 100%; display: flex; flex-direction: column;
+                  justify-content: space-between; gap: clamp(16px, 4vh, 40px); }
+    .lander-mission { text-align: left; margin: 0 auto; max-width: 42ch;
+                      font-size: clamp(1.05rem, 3vw, 1.6rem); line-height: 1.4; color: var(--green); }
+    .lander-mission p { margin: 8px 0; }
+    .lander-mission .hi { color: var(--amber); text-shadow: 0 0 8px rgba(255,178,46,.6); }
+    .lander-cta { display: flex; flex-direction: column; align-items: center; gap: clamp(14px, 3vh, 22px); }
+    .lander-ask { font-size: clamp(1.15rem, 3.4vw, 1.7rem); color: #d8ffe1; letter-spacing: .03em;
+                  margin: 0 auto; max-width: 34ch; text-shadow: 0 0 10px rgba(93,255,123,.8); }
+    .lander-enter {
+      align-self: center; cursor: pointer; font-family: "VT323", monospace;
+      font-size: clamp(1.2rem, 3.6vw, 1.7rem); letter-spacing: .06em; color: var(--screen);
+      background: linear-gradient(180deg, #9fffb4, var(--green)); border: 1px solid #d8ffe1;
+      border-radius: 5px; padding: 10px 28px; text-shadow: none;
+      box-shadow: 0 0 16px rgba(93,255,123,.5), inset 0 1px 0 rgba(255,255,255,.6);
+      transition: transform .1s, box-shadow .1s;
+    }
+    .lander-enter:hover { transform: translateY(-1px);
+                          box-shadow: 0 0 24px rgba(93,255,123,.85), inset 0 1px 0 rgba(255,255,255,.6); }
+    .lander-enter:active { transform: translateY(0); }
+    .lander-enter:focus-visible { outline: 2px solid #d8ffe1; outline-offset: 3px; }
+    .lander-foot { text-align: center; font-size: clamp(.85rem, 2vw, 1.1rem);
+                   color: var(--green-d); letter-spacing: .06em; }
+
+    /* ----- CRT power-down / power-up transition -----
+       The .screen animates its HEIGHT (driven from JS with measured pixels) so the
+       metal console frame shrinks along with the glass — following it down to a
+       slim bar, never fully gone (topbar + hazard + statusbar stay). The inner
+       .crt content squashes/fades like collapsing phosphor. On accept the lander
+       screen collapses, the overlay drops, then the dashboard screen grows in. */
+    .screen.crt-anim {
+      min-height: 0; overflow: hidden;
+      transition: height .5s ease, padding .5s ease, filter .5s ease;
+    }
+    .screen.crt-anim > .crt {
+      transition: transform .5s ease, opacity .5s ease; transform-origin: center;
+    }
+    /* Accelerate into the line, decelerate out of it — no slow-in/slow-out pause at
+       the collapsed seam, so the power-off → power-on reads as one continuous snap. */
+    .screen.crt-anim.crt-collapsing, .screen.crt-anim.crt-collapsing > .crt {
+      transition-timing-function: cubic-bezier(0.42, 0, 0.98, 0.7);
+    }
+    .screen.crt-anim.crt-expanding, .screen.crt-anim.crt-expanding > .crt {
+      transition-timing-function: cubic-bezier(0, .55, .45, 1);
+    }
+    .screen.crt-collapsed { padding-top: 0; padding-bottom: 0; filter: brightness(2.2); }
+    .screen.crt-collapsed > .crt { transform: scaleY(.02); opacity: 0; }
+    @media (prefers-reduced-motion: reduce) {
+      .screen.crt-anim, .screen.crt-anim > .crt { transition: none; }
+    }
   </style>
 </head>
 <body>
+  <div class="lander" id="lander" role="dialog" aria-modal="true" aria-labelledby="lander-head">
+    <div class="stage">
+      <div class="console">
+        <span class="rivet tl"></span><span class="rivet tr"></span>
+        <span class="rivet bl"></span><span class="rivet br"></span>
+
+        <div class="topbar">
+          <div class="nameplate" id="lander-head">I.C.E. · Infrared Crowd Estimation</div>
+          <div class="urgent">● Boot</div>
+        </div>
+        <div class="hazard"></div>
+
+        <div class="screen">
+          <div class="crt lander-crt">
+            <div class="lander-mission">
+              <p>&gt; MISSION //</p>
+              <p>We count how many people fill each area using infrared LiDAR.</p>
+              <p class="hi">No cameras. No faces. No names. No tracking.</p>
+              <p>Just a live number that helps the crowd move — not a machine that watches it.</p>
+            </div>
+            <div class="lander-cta">
+              <div class="lander-ask">&gt; Want to stay informed while we keep everyone anonymous?</div>
+              <button type="button" class="lander-enter" id="lander-enter">&gt; YES — ENTER TERMINAL_</button>
+              <div class="lander-foot">anonymous · no cameras · serving the crowd, not surveilling it</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Show the mission lander only on a visitor's first arrival. This runs
+    // synchronously right after the overlay is parsed, so returning visitors get
+    // it hidden before first paint (no flash of the prompt over the dashboard).
+    (function () {
+      var KEY = "ice.lander.seen.v1";
+      var lander = document.getElementById("lander");
+      if (!lander) return;
+      var seen = false;
+      try { seen = localStorage.getItem(KEY) === "1"; } catch (e) {}
+      if (seen) { lander.hidden = true; return; }
+
+      var enter = document.getElementById("lander-enter");
+      var landerScreen = lander.querySelector(".screen");
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      // Screen height the collapse stops at — a thin CRT line; the frame keeps its
+      // topbar/hazard/statusbar, so the console shrinks to a slim bar, not to zero.
+      var LINE = 6;
+
+      // Fire cb once the .screen's height transition finishes (ignore the padding /
+      // filter / inner-content transitions that run alongside it).
+      function onHeightEnd(el, cb) {
+        el.addEventListener("transitionend", function te(e) {
+          if (e.target !== el || e.propertyName !== "height") return;
+          el.removeEventListener("transitionend", te);
+          cb();
+        });
+      }
+
+      if (enter) enter.addEventListener("click", function () {
+        try { localStorage.setItem(KEY, "1"); } catch (e) {}
+
+        // Resolve the dashboard screen lazily: this inline script runs during parse,
+        // before #main-console exists further down the page, so we can only find it
+        // once the visitor clicks (page fully parsed by then).
+        var mainScreen = document.querySelector("#main-console .screen");
+
+        // No animation path: just reveal the dashboard.
+        if (reduce || !landerScreen || !mainScreen) { lander.hidden = true; return; }
+
+        // Measure the dashboard's natural height now, while it's rendered full
+        // behind the overlay — we grow back to exactly this later.
+        var mainFull = mainScreen.getBoundingClientRect().height;
+
+        // 1) Collapse the lander screen: pin its height in px, then transition to a
+        //    line — the metal frame reflows shorter with it.
+        landerScreen.style.height = landerScreen.getBoundingClientRect().height + "px";
+        landerScreen.classList.add("crt-anim", "crt-collapsing");
+        void landerScreen.offsetHeight; // commit the start height before collapsing
+        landerScreen.classList.add("crt-collapsed");
+        landerScreen.style.height = LINE + "px";
+
+        onHeightEnd(landerScreen, function () {
+          // 2) Drop the overlay and start the dashboard screen collapsed...
+          lander.hidden = true;
+          mainScreen.classList.add("crt-anim", "crt-expanding", "crt-collapsed");
+          mainScreen.style.height = LINE + "px";
+          void mainScreen.offsetHeight; // commit collapsed state
+          // ...then grow it (and unsquash the content) up to full height.
+          mainScreen.classList.remove("crt-collapsed");
+          mainScreen.style.height = mainFull + "px";
+          onHeightEnd(mainScreen, function () {
+            // Release the fixed height so the screen stays responsive afterwards.
+            mainScreen.style.height = "";
+            mainScreen.classList.remove("crt-anim", "crt-expanding");
+          });
+        });
+      });
+    })();
+  </script>
+
   <div class="stage">
-    <div class="console">
+    <div class="console" id="main-console">
       <span class="rivet tl"></span><span class="rivet tr"></span>
       <span class="rivet bl"></span><span class="rivet br"></span>
 

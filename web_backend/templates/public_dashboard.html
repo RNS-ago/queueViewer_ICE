@@ -484,6 +484,51 @@
         if (!d.contains(e.target)) d.removeAttribute("open");
       });
     });
+
+    // Hand off to the staff terminal with the CRT transition: collapse this console
+    // to a line, stash a flag (+ its width) for the next page, then navigate. The
+    // advanced dashboard reads the flag and grows its (wider) console out of the
+    // line, so the power-off here continues as a power-on there.
+    (function () {
+      var link = document.querySelector(".links a[href]");
+      var mainConsole = document.getElementById("main-console");
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!link || !mainConsole || reduce) return;
+
+      link.addEventListener("click", function (e) {
+        // Respect modifier-clicks / middle-click (open in new tab) — no animation.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        var url = link.href;
+
+        // Stash the console's width so the staff terminal can start its grow from
+        // the same-width line (then widen out to its own, wider width).
+        try {
+          sessionStorage.setItem("ice.crt.grow", "1");
+          sessionStorage.setItem("ice.crt.width",
+            String(Math.round(mainConsole.getBoundingClientRect().width)));
+        } catch (err) {}
+
+        // Collapse via transform scale from the CENTER (not layout height) so it
+        // pivots at the console's middle — matching the staff terminal's grow, which
+        // also pivots at center. transform doesn't reflow, so nothing anchors to a
+        // corner. Squash to a thin horizontal line at full width.
+        mainConsole.style.transformOrigin = "center center";
+        void mainConsole.offsetHeight;
+        mainConsole.style.transition = "transform .5s cubic-bezier(0.42, 0, 0.98, 0.7), filter .5s ease";
+        mainConsole.style.filter = "brightness(2.2)";
+        mainConsole.style.transform = "scaleY(.006)";
+
+        // Navigate once collapsed — with a timeout fallback in case transitionend
+        // is missed (e.g. tab backgrounded mid-animation).
+        var went = false;
+        function go() { if (went) return; went = true; window.location.href = url; }
+        mainConsole.addEventListener("transitionend", function te(ev) {
+          if (ev.target === mainConsole && ev.propertyName === "transform") go();
+        });
+        setTimeout(go, 700);
+      });
+    })();
   </script>
 
   <script id="series-data" type="application/json">{{ series_json|safe }}</script>

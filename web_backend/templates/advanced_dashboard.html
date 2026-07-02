@@ -223,7 +223,7 @@
 </head>
 <body>
   <div class="stage">
-    <div class="console">
+    <div class="console" id="main-console">
       <span class="rivet tl"></span><span class="rivet tr"></span>
       <span class="rivet bl"></span><span class="rivet br"></span>
 
@@ -311,6 +311,29 @@
       </div>
     </div>
   </div>
+
+  <script>
+    // CRT handoff (part 1 of 2): if we arrived from the public dashboard's staff-
+    // terminal transition, collapse this console to a line *before first paint* so
+    // the full dashboard never flashes. The matching grow-in runs on load, after
+    // the chart has drawn (see the end of <body>).
+    (function () {
+      var grow = false, w = 0;
+      try {
+        grow = sessionStorage.getItem("ice.crt.grow") === "1";
+        w = parseInt(sessionStorage.getItem("ice.crt.width") || "0", 10);
+        sessionStorage.removeItem("ice.crt.grow");
+        sessionStorage.removeItem("ice.crt.width");
+      } catch (e) {}
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var el = document.getElementById("main-console");
+      if (!grow || reduce || !el) return;
+      // Hide (keep layout, so the chart still measures/draws at full width) until
+      // part 2 sets the exact center-scale start state and animates it in.
+      el.style.visibility = "hidden";
+      el.setAttribute("data-crt-grow", w > 0 ? String(w) : "0");
+    })();
+  </script>
 
   <script>
     // Turn each sensor's last-seen ISO timestamp into a "x ago" label. Computed
@@ -532,6 +555,53 @@
      setInterval(tickSeen, 1000);
      setInterval(refresh, 60000);
    });
+  </script>
+
+  <script>
+    // CRT handoff (part 2 of 2): power the console on — grow it out of the collapsed
+    // line the public dashboard left, both vertically (to its natural height) and
+    // horizontally (from the public width to the wider staff-terminal width, filling
+    // the extra space). Registered after the chart's load handler above, so the
+    // measured full height includes the drawn plot; a resize afterward lets Plotly
+    // refit to the final width.
+    (function () {
+      var el = document.getElementById("main-console");
+      var attr = el && el.getAttribute("data-crt-grow");
+      if (!el || !attr) return;
+      window.addEventListener("load", function () {
+        var EASE = "cubic-bezier(0, .55, .45, 1)", DUR = ".55s";
+
+        // Full (natural) width, measured before any transform is applied. The public
+        // width we came from is in the data attr; the horizontal scale grows from
+        // that up to full, so the console widens into the extra staff-terminal space.
+        var fullW = el.getBoundingClientRect().width;
+        var startW = parseInt(attr, 10);
+        var sx = startW > 0 ? Math.min(1, startW / fullW) : 1;
+
+        // Start collapsed: a thin horizontal line at the public width, pivoting at
+        // center (matches the public dashboard's center collapse), then reveal.
+        el.style.transformOrigin = "center center";
+        el.style.transition = "none";
+        el.style.transform = "scaleY(.006) scaleX(" + sx + ")";
+        el.style.filter = "brightness(2.2)";
+        el.style.visibility = "";
+        void el.offsetHeight;
+
+        // Power on: scale back to full on both axes, fading the flash out.
+        el.style.transition = "transform " + DUR + " " + EASE + ", filter " + DUR + " ease";
+        el.style.transform = "none";
+        el.style.filter = "";
+
+        el.addEventListener("transitionend", function te(ev) {
+          if (ev.target !== el || ev.propertyName !== "transform") return;
+          el.removeEventListener("transitionend", te);
+          el.style.transition = el.style.transform = el.style.transformOrigin = el.style.filter = "";
+          el.removeAttribute("data-crt-grow");
+          // Nudge Plotly to re-sharpen after the scale settles.
+          try { window.dispatchEvent(new Event("resize")); } catch (e) {}
+        });
+      });
+    })();
   </script>
 </body>
 </html>

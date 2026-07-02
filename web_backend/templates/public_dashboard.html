@@ -233,7 +233,7 @@
           <button type="button" class="led{% if target == "device:"|add:d %} on{% endif %}" data-target="device:{{ d }}" title="{{ d }}" aria-label="{{ d }}" aria-pressed="{% if target == "device:"|add:d %}true{% else %}false{% endif %}"></button>
           {% endfor %}
         </div>
-        <div class="urgent" id="live-badge">● Live</div>
+        <div class="urgent{% if not latest.online %} stale{% endif %}" id="live-badge">{% if latest.online %}● Live{% else %}● Offline{% endif %}</div>
       </div>
       <div class="hazard"></div>
 
@@ -290,8 +290,8 @@
 
       {% if latest %}
       <div class="statusbar" data-last-seen="{{ latest.last_seen }}">
-        <span class="conn" id="conn"><span class="dot"></span><span id="conn-status">ONLINE</span></span>
-        <span class="ago" id="updated-ago">updated just now</span>
+        <span class="conn{% if not latest.online %} offline{% endif %}" id="conn"><span class="dot"></span><span id="conn-status">{% if latest.online %}ONLINE{% else %}OFFLINE{% endif %}</span></span>
+        <span class="ago{% if not latest.online %} offline{% endif %}" id="updated-ago">updated just now</span>
         <span class="rate">auto-refresh 60s</span>
         <span class="stamp">ts {{ latest.ts }}</span>
       </div>

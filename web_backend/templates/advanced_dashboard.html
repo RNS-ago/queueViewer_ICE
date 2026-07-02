@@ -6,15 +6,17 @@
   <title>Queue counter — staff dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.plot.ly" crossorigin>
   <!-- Preload the two latin woff2 files so the fonts are ready by first paint
        (block hides text until then, so no fallback-then-swap reflow). -->
   <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/vt323/v18/pxiKyp0ihIEF2isfFJU.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="https://fonts.gstatic.com/s/sharetechmono/v16/J7aHnp1uDWRBEqV98dVQztYldFcLowEF.woff2">
   <link href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=block" rel="stylesheet">
-  <!-- defer: Plotly is ~4.5 MB; loading it render-blocking in <head> stalls the
-       whole page on a slow uplink (the body never paints). Deferred, the page
-       renders immediately and the chart fills in once Plotly is ready. -->
-  <script src="https://cdn.plot.ly/plotly-3.0.0.min.js" charset="utf-8" defer></script>
+  <!-- plotly-basic (~1 MB) not the full bundle (~4.4 MB): the chart only uses
+       scatter traces plus core subplots/shapes/annotations, all of which the
+       basic partial bundle includes. defer keeps it non-render-blocking, so the
+       page paints immediately and the chart fills in once Plotly is ready. -->
+  <script src="https://cdn.plot.ly/plotly-basic-3.0.0.min.js" charset="utf-8" defer></script>
   <style>
     :root {
       --green:  #5dff7b;
@@ -303,8 +305,8 @@
       {% endif %}
 
       <div class="statusbar" data-last-seen="{{ latest.last_seen|default:'' }}">
-        <span class="conn" id="conn"><span class="ledpulse"></span><span id="conn-status">ONLINE</span></span>
-        <span class="note" id="conn-note">updated just now · polling every 60s</span>
+        <span class="conn{% if not latest.online %} offline{% endif %}" id="conn"><span class="ledpulse"></span><span id="conn-status">{% if latest and latest.online %}ONLINE{% else %}OFFLINE{% endif %}</span></span>
+        <span class="note{% if not latest.online %} offline{% endif %}" id="conn-note">{% if latest %}updated just now · {% endif %}polling every 60s</span>
         <span class="target">sector {{ title|default:"--" }}</span>
       </div>
     </div>

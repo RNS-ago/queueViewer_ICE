@@ -344,6 +344,13 @@ def _dashboard_context(request):
         title = device
         target = f"device:{device}" if device else target
 
+    # Resolve online/offline server-side so the first paint is already correct
+    # (the client keeps it live afterward). Without this the page would render a
+    # default "online" and flip to offline once JS ran — a visible flicker.
+    if latest:
+        seen = datetime.fromisoformat(latest["last_seen"])
+        latest["online"] = (datetime.now(timezone.utc) - seen) <= _ONLINE_AFTER
+
     return {
         "devices": devices,
         "zones": zones,

@@ -255,6 +255,13 @@
     .lander-enter:focus-visible { outline: 2px solid #d8ffe1; outline-offset: 3px; }
     .lander-foot { text-align: center; font-size: clamp(.85rem, 2vw, 1.1rem);
                    color: var(--green-d); letter-spacing: .06em; }
+    /* On phones the tall min-height + space-between leaves a big empty band between
+       the mission and the button. Let the screen hug its content and stack the two
+       groups with a fixed gap instead of stretching them apart. */
+    @media (max-width: 560px) {
+      .lander .screen { min-height: 0; }
+      .lander-crt { justify-content: flex-start; gap: clamp(22px, 7vh, 48px); }
+    }
 
     /* ----- CRT power-down / power-up transition -----
        The .screen animates its HEIGHT (driven from JS with measured pixels) so the
